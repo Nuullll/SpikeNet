@@ -35,9 +35,16 @@ class Neuron:
 
     def reset(self):
         """
-        Reset the internal state.
+        Resets the internal state.
         """
         raise NotImplementedError('Neuron.reset() is not implemented.')
+
+    def fire_and_reset(self):
+        """
+        Fires a spike and resets the neuron.
+        """
+        self.output = self.spike_amp
+        self.reset()
 
 
 class PoissonNeuron(Neuron):
@@ -60,12 +67,65 @@ class PoissonNeuron(Neuron):
         """
         self.state += 1
         if self.state == self.firing_step:
-            # fires a spike
-            self.output = self.spike_amp
-            self.reset()
+            # fire and reset
+            self.fire_and_reset()
 
     def reset(self):
         """
         Reset `self.state` to 0.
         """
         self.state = 0
+
+
+class LIFNeuron(Neuron):
+    """
+    Leaky-Integrate-and-Fire neuron model.
+    """
+    def __init__(self, rest, threshold, leak_factor, **kwargs):
+        """
+        Initialize a LIF Neuron.
+        :param rest:            float       Rest potential.
+        :param threshold:       float       Spiking threshold.
+        :param leak_factor:     float       Leak factor, less than 1 (indicates leaking)
+        :param kwargs:          dict        Optional parameters.
+        """
+        self.rest = rest
+        self.threshold = threshold
+        self.leak_factor = leak_factor
+
+        # The membrane potential serves as the internal state.
+        # Initialize to rest potential.
+        super(LIFNeuron, self).__init__(state=rest, **kwargs)
+
+    def process(self):
+        """
+        Leaks, integrates, and fires.
+        Updates `self.state` and `self.output`.
+        """
+        # leak
+        self.v -= self.leak_factor * (self.v - self.rest)
+
+        # integrate
+        self.v += self.input
+
+        # fire
+        if self.v >= self.threshold:
+            self.fire_and_reset()
+
+    def reset(self):
+        """
+        Reset membrane potential to rest potential.
+        """
+        self.state = self.rest
+
+    @property
+    def v(self):
+        """
+        Membrane potential property, returns `self.state`.
+        For convenience.
+        """
+        return self.state
+
+    @v.setter
+    def v(self, value):
+        self.state = value
