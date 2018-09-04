@@ -19,3 +19,12 @@ class Monitor:
         self.target = target
         self.state_vars = state_vars
         self.record = {state: [] for state in state_vars}
+
+    def update(self):
+        """
+        Gets `state` values from `target` <Layer>.
+        Updates `self.record`.
+        """
+        for state in self.record:
+            # TODO: Implement layer-level process().
+            pass

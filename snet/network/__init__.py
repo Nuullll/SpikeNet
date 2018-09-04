@@ -75,3 +75,22 @@ class Network:
         self.monitors = {}          # {layer_name: <Monitor>}
 
         self.dt = dt
+
+    def run(self, time):
+        """
+        Run simulation for given `time`.
+        :param time:        float       Simulation time. (NOT steps)
+        """
+        # Total simulation steps
+        steps = int(time / self.dt)
+
+        # Do simulation
+        for t in range(steps):
+            # Update monitors
+
+    def _update_monitors(self):
+        """
+        Feed state values to monitors.
+        """
+        for mon in self.monitors.values():
+            pass
