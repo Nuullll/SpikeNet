@@ -21,7 +21,7 @@ class Layer:
     def __init__(self, neuron_type, size, **kwargs):
         """
         Initialize a list of neurons of specific type as a <Layer>.
-        :param neuron_type:         string      'Poisson' or 'LIF'.
+        :param neuron_type:         str         'Poisson' or 'LIF'.
         :param size:                int         The number of neurons in the <Layer>.
         :param kwargs:              dict        Parameters for instantiating <Neuron>s.
         """
