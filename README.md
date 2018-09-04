@@ -1,0 +1,2 @@
+# SpikeNet
+SNN simulation framework.
