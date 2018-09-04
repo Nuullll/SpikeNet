@@ -6,9 +6,23 @@
 # @Last modified time: 04-Sep-2018
 
 
+from .neuron import *
+
+
 class Layer:
     """
     <Layer> contains a list of <Neuron>s.
     """
-    def __init__(self):
-        pass
+    neuron_map = {
+        'Poisson': PoissonNeuron,
+        'LIF': LIFNeuron
+    }
+
+    def __init__(self, neuron_type, size, **kwargs):
+        """
+        Initialize a list of neurons of specific type as a <Layer>.
+        :param neuron_type:         string      'Poisson' or 'LIF'.
+        :param size:                int         The number of neurons in the <Layer>.
+        :param kwargs:              dict        Parameters for instantiating <Neuron>s.
+        """
+        self.neurons = [self.neuron_map[neuron_type](**kwargs) for i in range(size)]
