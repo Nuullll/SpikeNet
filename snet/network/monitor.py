@@ -6,6 +6,10 @@
 # @Last modified time: 04-Sep-2018
 
 
+import torch
+from .layer import *
+
+
 class Monitor:
     """
     Record state variables in specific <Layer>.
@@ -18,13 +22,12 @@ class Monitor:
         """
         self.target = target
         self.state_vars = state_vars
-        self.record = {state: [] for state in state_vars}
+        self.record = {state: torch.tensor([]) for state in state_vars}
 
     def update(self):
         """
         Gets `state` values from `target` <Layer>.
         Updates `self.record`.
         """
-        for state in self.record:
-            # TODO: Implement layer-level process().
-            pass
+        for state, history in self.record:
+            self.record[state] = torch.cat(history, self.target.get_state(state))

@@ -6,6 +6,7 @@
 # @Last modified time: 04-Sep-2018
 
 
+import torch
 from .neuron import *
 
 
@@ -26,3 +27,27 @@ class Layer:
         :param kwargs:              dict        Parameters for instantiating <Neuron>s.
         """
         self.neurons = [self.neuron_map[neuron_type](**kwargs) for i in range(size)]
+
+    def get_state(self, state):
+        """
+        Gets the specific current `state` value of all neurons, as a <torch.Tensor>.
+        :param state:       str
+        :return:            <torch.Tensor>
+        """
+        return torch.tensor([getattr(neuron, state, None) for neuron in self.neurons])
+
+    def set_state(self, state, value):
+        """
+        Sets the specific `state` value of all neurons.
+        :param state:       str
+        :param value:       <torch.Tensor>
+        """
+        for i, neuron in enumerate(self.neurons):
+            setattr(neuron, state, value[i])
+
+    def process(self):
+        """
+        Processes one time step on neurons.
+        """
+        for neuron in self.neurons:
+            neuron.process()

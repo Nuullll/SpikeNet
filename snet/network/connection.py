@@ -6,6 +6,9 @@
 # @Last modified time: 04-Sep-2018
 
 
+from .layer import *
+
+
 class Connection:
     """
     <Connection> describes the weight matrix between two <Layer>s of <Neuron>s.
@@ -15,8 +18,15 @@ class Connection:
         Initialize a <Connection> which connects from `pre_layer` to `post_layer`.
         :param pre_layer:       <Layer>
         :param post_layer:      <Layer>
-        :param weight:          <np.ndarray>        Matches the sizes of `pre_layer` and `post_layer`.
+        :param weight:          <torch.Tensor>      Matches the sizes of `pre_layer` and `post_layer`.
         """
         self.pre_layer = pre_layer
         self.post_layer = post_layer
         self.weight = weight
+
+    def feed_forward(self):
+        """
+        Fetches output of `pre_layer` and computes results as input of `post_layer`.
+        """
+        pre = self.pre_layer.get_state('output')
+        self.post_layer.set_state('input', torch.mm(pre, self.weight))

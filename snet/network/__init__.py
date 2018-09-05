@@ -13,7 +13,7 @@ from .monitor import *
 
 class NetworkBuilder:
     """
-    Network builder, with given <Layer>s, <np.ndarray> weights, <Monitor>s.
+    Network builder, with given <Layer>s, <torch.Tensor> weights, <Monitor>s.
     """
     def __init__(self, layers, weights, monitors, dt=1.0):
         """
@@ -87,10 +87,31 @@ class Network:
         # Do simulation
         for t in range(steps):
             # Update monitors
+            self._update_monitors()
+
+            # Feed forward
+            self._feed_forward()
+
+            # Neurons process
+            self._process()
 
     def _update_monitors(self):
         """
         Feed state values to monitors.
         """
         for mon in self.monitors.values():
-            pass
+            mon.update()
+
+    def _feed_forward(self):
+        """
+        Feed pre-synaptic signals to synapses, and then pass results to post-synaptic neurons' input.
+        """
+        for conn in self.connections.values():
+            conn.feed_forward()
+
+    def _process(self):
+        """
+        Neurons in each layer process. Generates new output for each layer.
+        """
+        for lyr in self.layers.values():
+            lyr.process()
