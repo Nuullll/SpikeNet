@@ -29,5 +29,5 @@ class Monitor:
         Gets `state` values from `target` <Layer>.
         Updates `self.record`.
         """
-        for state, history in self.record:
-            self.record[state] = torch.cat(history, self.target.get_state(state))
+        for state, history in self.record.items():
+            self.record[state] = torch.cat((history, self.target.get_state(state)), 0)

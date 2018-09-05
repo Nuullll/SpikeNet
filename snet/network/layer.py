@@ -34,7 +34,7 @@ class Layer:
         :param state:       str
         :return:            <torch.Tensor>
         """
-        return torch.tensor([getattr(neuron, state, None) for neuron in self.neurons])
+        return torch.tensor([[getattr(neuron, state, None) for neuron in self.neurons]])
 
     def set_state(self, state, value):
         """
@@ -43,7 +43,7 @@ class Layer:
         :param value:       <torch.Tensor>
         """
         for i, neuron in enumerate(self.neurons):
-            setattr(neuron, state, value[i])
+            setattr(neuron, state, value[i].item())
 
     def process(self):
         """

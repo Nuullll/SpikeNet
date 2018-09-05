@@ -4,3 +4,6 @@
 # @Filename: __init__.py
 # @Last modified by:   Yilong Guo
 # @Last modified time: 04-Sep-2018
+
+
+from .network import *
