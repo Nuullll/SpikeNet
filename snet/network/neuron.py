@@ -21,6 +21,7 @@ class Neuron:
         self.state = state
         self.input = 0.0
         self.output = 0.0
+        self.clear_output = False
 
         # optional config
         self.spike_amp = kwargs.get('spike_amp', 1.0)    # The default output amplitude
@@ -44,7 +45,15 @@ class Neuron:
         Fires a spike and resets the neuron.
         """
         self.output = self.spike_amp
+        self.clear_output = True
         self.reset()
+
+    def preprocess(self):
+        """
+        Clears output after firing.
+        """
+        if self.clear_output:
+            self.output = 0.0
 
 
 class PoissonNeuron(Neuron):
@@ -65,6 +74,8 @@ class PoissonNeuron(Neuron):
         Generates Poisson spike trains. Firing rate equals to `state`.
         Outputs a spike after every `firing_step` calls.
         """
+        self.preprocess()
+
         self.state += 1
         if self.state == self.firing_step:
             # fire and reset
@@ -102,6 +113,8 @@ class LIFNeuron(Neuron):
         Leaks, integrates, and fires.
         Updates `self.state` and `self.output`.
         """
+        self.preprocess()
+
         # leak
         self.v -= self.leak_factor * (self.v - self.rest)
 
