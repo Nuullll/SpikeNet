@@ -9,7 +9,7 @@
 import random
 
 
-class Neuron:
+class Neuron(object):
     """
     Abstract base class for a neuron.
     """
@@ -54,6 +54,7 @@ class Neuron:
         """
         if self.clear_output:
             self.output = 0.0
+            self.clear_output = False
 
 
 class PoissonNeuron(Neuron):
