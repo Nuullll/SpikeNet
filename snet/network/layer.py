@@ -7,47 +7,104 @@
 
 
 import torch
-from .neuron import *
 
 
-class Layer:
+class Layer(object):
     """
-    <Layer> contains a list of <Neuron>s.
+    Abstract class <Layer>.
     """
-    neuron_map = {
-        'Poisson': PoissonNeuron,
-        'LIF': LIFNeuron
-    }
 
-    def __init__(self, neuron_type, size, **kwargs):
+    def __init__(self, state):
         """
-        Initialize a list of neurons of specific type as a <Layer>.
-        :param neuron_type:         str         'Poisson' or 'LIF'.
-        :param size:                int         The number of neurons in the <Layer>.
-        :param kwargs:              dict        Parameters for instantiating <Neuron>s.
+        Each neuron serves as a FSM.
+        :param state:       <torch.Tensor>      Inner state tensor for all neurons.
         """
-        self.neurons = [self.neuron_map[neuron_type](**kwargs) for i in range(size)]
+        self.size = state.shape[0]
+        self.state = state
+        self.input = torch.zeros_like(state, dtype=torch.float)
+        self.output = torch.zeros_like(state, dtype=torch.float)
+        self.firing_mask = torch.zeros_like(state, dtype=torch.uint8)
 
-    def get_state(self, state):
-        """
-        Gets the specific current `state` value of all neurons, as a <torch.Tensor>.
-        :param state:       str
-        :return:            <torch.Tensor>
-        """
-        return torch.tensor([[getattr(neuron, state, None) for neuron in self.neurons]])
-
-    def set_state(self, state, value):
-        """
-        Sets the specific `state` value of all neurons.
-        :param state:       str
-        :param value:       <torch.Tensor>
-        """
-        for i, neuron in enumerate(self.neurons):
-            setattr(neuron, state, value[i].item())
+        # global config for <Layer> class
+        self.config = {
+            'rest': 0.0,        # rest potential of output signal
+            'peak': 1.0         # peak potential of output signal when firing a spike
+        }
 
     def process(self):
         """
-        Processes one time step on neurons.
+        Processes the layer by one time step.
         """
-        for neuron in self.neurons:
-            neuron.process()
+        raise NotImplementedError("Layer.process() is not implemented.")
+
+    def _preprocess(self):
+        """
+        Clears output according to `firing_mask`.
+        """
+        self.output.masked_fill_(self.firing_mask, self.config['rest'])
+        self.firing_mask = torch.zeros_like(self.state, dtype=torch.uint8)
+
+    def _fire(self):
+        """
+        Fires spikes according to `firing_mask`.
+        """
+        self.output.masked_fill_(self.firing_mask, self.config['peak'])
+
+    def _reset(self):
+        """
+        Resets internal state.
+        """
+        raise NotImplementedError("Layer._reset() is not implemented.")
+
+    def _fire_and_reset(self):
+        """
+        Invokes `_fire()` and `_reset()`.
+        """
+        self._fire()
+        self._reset()
+
+
+class PoissonLayer(Layer):
+    """
+    Layer of Poisson neurons.
+    """
+    def __init__(self, firing_step):
+        """
+        :param firing_step:         <torch.IntTensor>       Specify firing step of each neuron.
+        """
+        self.firing_step = firing_step
+        super(PoissonLayer, self).__init__(state=firing_step/2)     # half way to spike
+
+    def process(self):
+        """
+        Generates a spike every `firing_step` calls.
+        """
+        self._preprocess()
+
+        self.state += 1
+        # fire spikes
+        self.firing_mask = (self.state >= self.firing_step)
+        self._fire_and_reset()
+
+    def _reset(self):
+        """
+        Resets `state` to `0`.
+        """
+        self.state.masked_fill_(self.firing_mask, 0)
+
+
+class LIFLayer(Layer):
+    """
+    Layer of LIF neurons.
+    """
+    def __init__(self, rest, threshold, leak_factor, refractory):
+        """
+        :param rest:            float       Rest potential.
+        :param threshold:       float       Threshold for firing.
+        :param leak_factor:     float       Leak factor between 0 and 1.
+        :param refractory:      int         Refractory period. (unit: time step)
+        """
+        self.config['rest'] = rest
+        self.config['threshold'] = threshold
+        self.config['leak_factor'] = leak_factor
+        self.config['refractory'] = refractory
