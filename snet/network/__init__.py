@@ -89,8 +89,8 @@ class Network:
             # Update monitors
             self._update_monitors()
 
-            # Fetch pre-spikes
-            self._record_pre_spikes(t)
+            # STDP updates according to incoming new pre-spikes
+            self._update_on_pre_spikes(t)
 
             # Feed forward
             self._feed_forward()
@@ -98,10 +98,8 @@ class Network:
             # Layers process
             self._process()
 
-            # Fetch post-spikes
-            self._record_post_spikes(t)
-
-            # Update weights
+            # STDP updates according to incoming new post-spikes
+            self._update_on_post_spikes(t)
 
     def _update_monitors(self):
         """
@@ -110,12 +108,12 @@ class Network:
         for mon in self.monitors.values():
             mon.update()
 
-    def _record_pre_spikes(self, time):
+    def _update_on_pre_spikes(self, time):
         """
-        Feeds pre-spikes to <Connection>s.
+        Updates weights when new pre-spikes come.
         """
         for conn in self.connections.values():
-            conn.record_pre_spikes(time)
+            conn.update_on_pre_spikes(time)
 
     def _feed_forward(self):
         """
@@ -124,12 +122,12 @@ class Network:
         for conn in self.connections.values():
             conn.feed_forward()
 
-    def _record_post_spikes(self, time):
+    def _update_on_post_spikes(self, time):
         """
-        Feeds post-spikes to <Connection>s.
+        Updates weights when new post-spikes come.
         """
         for conn in self.connections.values():
-            conn.record_post_spikes(time)
+            conn.update_on_post_spikes(time)
 
     def _process(self):
         """
