@@ -143,9 +143,7 @@ class LIFLayer(Layer):
         active = (self._spike_history >= self.refractory)
 
         # integrate (on active neurons)
-        i = self.i
-        i.masked_fill_(~active, 0)
-        self.v += i
+        self.v += torch.where(active, self.i, torch.zeros_like(self.i))
 
         # fire
         self.firing_mask = (self.v >= self.v_threshold)

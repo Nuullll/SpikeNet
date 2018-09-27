@@ -30,4 +30,4 @@ class Monitor:
         Updates `self.record`.
         """
         for state, history in self.record.items():
-            self.record[state] = torch.cat((history, self.target.get_state(state)), 0)
+            self.record[state] = torch.cat((history, getattr(self.target, state).unsqueeze(0)), 0)

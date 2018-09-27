@@ -28,5 +28,5 @@ class Connection:
         """
         Fetches output of `pre_layer` and computes results as input of `post_layer`.
         """
-        pre = self.pre_layer.get_state('output')
-        self.post_layer.set_state('input', torch.matmul(pre, self.weight).squeeze(0))
+        pre = self.pre_layer.o
+        self.post_layer.i = torch.matmul(pre, self.weight)
