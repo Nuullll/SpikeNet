@@ -21,15 +21,13 @@ class Layer(object):
         """
         self.size = state.shape[0]
         self.state = state
-        self.input = torch.zeros_like(state, dtype=torch.float)
-        self.output = torch.zeros_like(state, dtype=torch.float)
+        self.i = torch.zeros_like(state, dtype=torch.float)         # input port
+        self.o = torch.zeros_like(state, dtype=torch.float)         # output port
         self.firing_mask = torch.zeros_like(state, dtype=torch.uint8)
 
         # global config for <Layer> class
-        self.config = {
-            'rest': 0.0,        # rest potential of output signal
-            'peak': 1.0         # peak potential of output signal when firing a spike
-        }
+        self.o_rest = 0.0       # rest potential of output signal
+        self.o_peak = 1.0       # peak potential of output signal when firing a spike
 
     def process(self):
         """
@@ -41,14 +39,14 @@ class Layer(object):
         """
         Clears output according to `firing_mask`.
         """
-        self.output.masked_fill_(self.firing_mask, self.config['rest'])
+        self.o.masked_fill_(self.firing_mask, self.o_rest)
         self.firing_mask = torch.zeros_like(self.state, dtype=torch.uint8)
 
     def _fire(self):
         """
         Fires spikes according to `firing_mask`.
         """
-        self.output.masked_fill_(self.firing_mask, self.config['peak'])
+        self.o.masked_fill_(self.firing_mask, self.o_peak)
 
     def _reset(self):
         """
@@ -97,14 +95,67 @@ class LIFLayer(Layer):
     """
     Layer of LIF neurons.
     """
-    def __init__(self, rest, threshold, leak_factor, refractory):
+    def __init__(self, size, v_rest, v_threshold, leak_factor, refractory):
         """
-        :param rest:            float       Rest potential.
-        :param threshold:       float       Threshold for firing.
+        :param size:            int         Number of neurons in this layer.
+        :param v_rest:          float       Rest potential.
+        :param v_threshold:     float       Threshold for firing.
         :param leak_factor:     float       Leak factor between 0 and 1.
         :param refractory:      int         Refractory period. (unit: time step)
         """
-        self.config['rest'] = rest
-        self.config['threshold'] = threshold
-        self.config['leak_factor'] = leak_factor
-        self.config['refractory'] = refractory
+        self.size = size
+        self.v_rest = v_rest
+        self.v_threshold = v_threshold
+        self.leak_factor = leak_factor
+        self.refractory = refractory
+
+        # record the steps from last spike timing to now
+        self._spike_history = torch.ones(size, dtype=torch.int) * refractory
+
+        # the membrane potential serves as the internal state
+        super(LIFLayer, self).__init__(state=torch.ones(size) * v_rest)
+
+    @property
+    def v(self):
+        """
+        Alias of `self.state`, i.e. the membrane potential.
+        """
+        return self.state
+
+    @v.setter
+    def v(self, value):
+        """
+        Sets `self.state`.
+        """
+        self.state = value
+
+    def process(self):
+        """
+        Leaks, integrates and fires.
+        """
+        self._preprocess()
+
+        # leak
+        self.v -= self.leak_factor * (self.v - self.v_rest)
+
+        # during refractory period?
+        self._spike_history += 1
+        active = (self._spike_history >= self.refractory)
+
+        # integrate (on active neurons)
+        i = self.i
+        i.masked_fill_(~active, 0)
+        self.v += i
+
+        # fire
+        self.firing_mask = (self.v >= self.v_threshold)
+        self._fire_and_reset()
+
+    def _reset(self):
+        """
+        Resets fired neurons' potentials to `self.v_rest`.
+        Starts refractory process.
+        """
+        self.v.masked_fill_(self.firing_mask, self.v_rest)
+        self._spike_history.masked_fill_(self.firing_mask, 0)
+
