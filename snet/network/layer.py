@@ -3,7 +3,7 @@
 # @Email:  vfirst218@gmail.com
 # @Filename: layer.py
 # @Last modified by:   Yilong Guo
-# @Last modified time: 04-Sep-2018
+# @Last modified time: 27-Sep-2018
 
 
 import torch
@@ -158,4 +158,3 @@ class LIFLayer(Layer):
         """
         self.v.masked_fill_(self.firing_mask, self.v_rest)
         self._spike_history.masked_fill_(self.firing_mask, 0)
-
