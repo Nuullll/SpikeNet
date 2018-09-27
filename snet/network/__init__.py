@@ -89,29 +89,57 @@ class Network:
             # Update monitors
             self._update_monitors()
 
+            # Fetch pre-spikes
+            self._record_pre_spikes(t)
+
             # Feed forward
             self._feed_forward()
 
-            # Neurons process
+            # Layers process
             self._process()
+
+            # Fetch post-spikes
+            self._record_post_spikes(t)
+
+            # Update weights
 
     def _update_monitors(self):
         """
-        Feed state values to monitors.
+        Feeds state values to monitors.
         """
         for mon in self.monitors.values():
             mon.update()
 
+    def _record_pre_spikes(self, time):
+        """
+        Feeds pre-spikes to <Connection>s.
+        """
+        for conn in self.connections.values():
+            conn.record_pre_spikes(time)
+
     def _feed_forward(self):
         """
-        Feed pre-synaptic signals to synapses, and then pass results to post-synaptic neurons' input.
+        Feeds pre-synaptic signals to synapses, and then pass results to post-synaptic neurons' input.
         """
         for conn in self.connections.values():
             conn.feed_forward()
 
+    def _record_post_spikes(self, time):
+        """
+        Feeds post-spikes to <Connection>s.
+        """
+        for conn in self.connections.values():
+            conn.record_post_spikes(time)
+
     def _process(self):
         """
-        Neurons in each layer process. Generates new output for each layer.
+        Each layer processes. Generates new output for each layer.
         """
         for lyr in self.layers.values():
             lyr.process()
+
+    def _update_weights(self):
+        """
+        Updates weights, according to rules config of <Connection>.
+        """
+        pass
