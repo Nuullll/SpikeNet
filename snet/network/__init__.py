@@ -109,10 +109,11 @@ class Network:
             # STDP updates according to incoming new post-spikes
             self._update_on_post_spikes(t)
 
-            # Display weight map
-            synapse = self.connections[('I', 'O')]
-            plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
-            plt.pause(0.00001)
+            if not t % 100:
+                # Display weight map
+                synapse = self.connections[('I', 'O')]
+                plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
+                plt.pause(0.00001)
 
     def _update_monitors(self):
         """
