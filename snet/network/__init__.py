@@ -10,6 +10,11 @@ from .layer import *
 from .connection import *
 from .monitor import *
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
+import matplotlib.pyplot as plt
+
 
 class NetworkBuilder:
     """
@@ -84,8 +89,11 @@ class Network:
         # Total simulation steps
         steps = int(time / self.dt)
 
+        logging.info("Start network simulation. Time = %d, dt = %f" % (time, self.dt))
+
         # Do simulation
         for t in range(steps):
+            logging.info("Now = %f" % (t * self.dt))
             # Update monitors
             self._update_monitors()
 
@@ -100,6 +108,10 @@ class Network:
 
             # STDP updates according to incoming new post-spikes
             self._update_on_post_spikes(t)
+
+            # Display weight map
+            plt.imshow(self.connections[('I', 'O')].weight.numpy())
+            plt.pause(0.00001)
 
     def _update_monitors(self):
         """
