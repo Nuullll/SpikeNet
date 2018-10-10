@@ -110,7 +110,8 @@ class Network:
             self._update_on_post_spikes(t)
 
             # Display weight map
-            plt.imshow(self.connections[('I', 'O')].weight.numpy())
+            synapse = self.connections[('I', 'O')]
+            plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max)
             plt.pause(0.00001)
 
     def _update_monitors(self):
