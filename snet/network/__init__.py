@@ -111,7 +111,7 @@ class Network:
 
             # Display weight map
             synapse = self.connections[('I', 'O')]
-            plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max)
+            plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
             plt.pause(0.00001)
 
     def _update_monitors(self):
