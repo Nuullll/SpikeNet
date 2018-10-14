@@ -30,8 +30,8 @@ class Connection:
 
         # STDP parameters
         self.learn_rate = 0.5
-        self.w_min = 1e-5
-        self.w_max = 1e-4
+        self.w_min = 1e-4
+        self.w_max = 1e-3
 
     def feed_forward(self):
         """
