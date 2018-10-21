@@ -71,7 +71,9 @@ class PoissonLayer(Layer):
         :param firing_step:         <torch.IntTensor>       Specify firing step of each neuron.
         """
         self.firing_step = firing_step
-        super(PoissonLayer, self).__init__(state=firing_step/2)     # half way to spike
+
+        state = firing_step.float() * torch.rand_like(firing_step.float())
+        super(PoissonLayer, self).__init__(state=state.long())
 
     def process(self):
         """
@@ -89,6 +91,14 @@ class PoissonLayer(Layer):
         Resets `state` to `0`.
         """
         self.state.masked_fill_(self.firing_mask, 0)
+
+    def set_step(self, firing_step):
+        """
+        Sets new firing steps. Resets `self.state`.
+        :param firing_step:     <torch.IntTensor>
+        """
+        self.firing_step = firing_step
+        self.state = (firing_step.float() * torch.rand_like(firing_step.float())).long()
 
 
 class LIFLayer(Layer):
@@ -108,6 +118,7 @@ class LIFLayer(Layer):
         self.v_threshold = v_threshold
         self.leak_factor = leak_factor
         self.refractory = refractory
+        self.res = 40e6                 # R = 40MOhm
 
         # record the steps from last spike timing to now
         self._spike_history = torch.ones(size, dtype=torch.int) * refractory
@@ -143,20 +154,19 @@ class LIFLayer(Layer):
         active = (self._spike_history >= self.refractory)
 
         # integrate (on active neurons)
-        self.v += torch.where(active, self.i, torch.zeros_like(self.i))
+        self.v += torch.where(active, self.res * self.i, torch.zeros_like(self.i))
 
         # lateral inhibition
         overshoot, ind = torch.sort(self.v - self.v_threshold, descending=True)
-        k = 2           # number of active neurons to keep
-        alpha = 50     # inhibition strength
+        k = 1           # number of active neurons to keep
 
         for i, value in enumerate(overshoot[:k]):
             if value < 0:
                 break
 
             mask = torch.ones_like(self.firing_mask)
-            mask.scatter_(0, ind[:i+1], 0.)
-            self.v.masked_scatter_(mask, self.v - alpha*value)
+            mask.scatter_(0, ind[i], 0)
+            self.v.masked_fill_(mask, self.v_rest)
 
         # fire
         self.firing_mask = (self.v >= self.v_threshold)

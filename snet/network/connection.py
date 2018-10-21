@@ -29,9 +29,13 @@ class Connection:
         self._last_post_spike_time = -torch.ones(self.post_layer.size)
 
         # STDP parameters
-        self.learn_rate = 0.5
-        self.w_min = 1e-4
-        self.w_max = 1e-3
+        self.learn_rate_p = 1.     # A+
+        self.learn_rate_m = 0.5     # A-
+        self.tau_p = 20               # 20ms\
+        self.tau_m = 30
+        self.decay = 1./20000
+        self.w_min = 0.
+        self.w_max = weight.max()
 
     def feed_forward(self):
         """
@@ -44,6 +48,10 @@ class Connection:
         """
         Updates weights when new pre-spikes come.
         """
+
+        # decay first
+        # self.weight -= self.decay * (self.weight - self.w_min)
+
         # record new pre-spikes
         self._last_pre_spike_time.masked_fill_(self.pre_layer.firing_mask, time)
 
@@ -56,7 +64,7 @@ class Connection:
             self._last_post_spike_time.repeat(self.pre_layer.size, 1)
 
         # weights decrease, because pre-spikes come after post-spikes
-        dw = self.learn_rate * (self.weight - self.w_min) * torch.exp(-dt)
+        dw = self.learn_rate_m * (self.weight - self.w_min) * torch.exp(-dt/self.tau_m)
         dw.masked_fill_(~active, 0)
         self.weight -= dw
 
@@ -76,6 +84,6 @@ class Connection:
             self._last_pre_spike_time.repeat(self.post_layer.size, 1).t()
 
         # weights increase, because post-spikes come after pre-spikes
-        dw = self.learn_rate * (self.w_max - self.weight) * torch.exp(-dt)
+        dw = self.learn_rate_p * (self.w_max - self.weight) * torch.exp(-dt/self.tau_p)
         dw.masked_fill_(~active, 0)
         self.weight += dw

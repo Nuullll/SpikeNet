@@ -10,9 +10,6 @@ from .layer import *
 from .connection import *
 from .monitor import *
 
-import logging
-logging.basicConfig(level=logging.INFO)
-
 import matplotlib.pyplot as plt
 
 
@@ -81,6 +78,8 @@ class Network:
 
         self.dt = dt
 
+        self.time = 0.
+
     def run(self, time):
         """
         Run simulation for given `time`.
@@ -89,16 +88,13 @@ class Network:
         # Total simulation steps
         steps = int(time / self.dt)
 
-        logging.info("Start network simulation. Time = %d, dt = %f" % (time, self.dt))
-
         # Do simulation
         for t in range(steps):
-            logging.info("Now = %f" % (t * self.dt))
             # Update monitors
             self._update_monitors()
 
             # STDP updates according to incoming new pre-spikes
-            self._update_on_pre_spikes(t)
+            self._update_on_pre_spikes(self.time + t)
 
             # Feed forward
             self._feed_forward()
@@ -107,13 +103,15 @@ class Network:
             self._process()
 
             # STDP updates according to incoming new post-spikes
-            self._update_on_post_spikes(t)
+            self._update_on_post_spikes(self.time + t)
 
-            if not t % 100:
-                # Display weight map
-                synapse = self.connections[('I', 'O')]
-                plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
-                plt.pause(0.00001)
+            # if not t % 200:
+            #     # Display weight map
+            #     synapse = self.connections[('I', 'O')]
+            #     plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
+            #     plt.pause(0.00001)
+
+        self.time += time
 
     def _update_monitors(self):
         """
