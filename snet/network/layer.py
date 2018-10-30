@@ -157,16 +157,21 @@ class LIFLayer(Layer):
         self.v += torch.where(active, self.res * self.i, torch.zeros_like(self.i))
 
         # lateral inhibition
-        overshoot, ind = torch.sort(self.v - self.v_threshold, descending=True)
-        k = 1           # number of active neurons to keep
+        dv = 5
 
-        for i, value in enumerate(overshoot[:k]):
-            if value < 0:
-                break
+        inds = (self.v - self.v_threshold).nonzero().squeeze()
+
+        perm = torch.randperm(inds.size(0))
+
+        for p in perm:
+            ind = inds[p]
+            overshoot = self.v[ind] - self.v_threshold
+            if overshoot < 0:
+                continue
 
             mask = torch.ones_like(self.firing_mask)
-            mask.scatter_(0, ind[i], 0)
-            self.v.masked_fill_(mask, self.v_rest)
+            mask.scatter_(0, ind, 0)
+            self.v.masked_scatter_(mask, self.v - dv).clamp_(min=self.v_rest)
 
         # fire
         self.firing_mask = (self.v >= self.v_threshold)
