@@ -116,7 +116,7 @@ class LIFLayer(Layer):
         self.size = size
         self.v_rest = v_rest
         self.v_threshold = v_threshold
-        self.leak_factor = leak_factor
+        self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
         self.refractory = refractory
         self.res = 40e6                 # R = 40MOhm
 
@@ -154,7 +154,7 @@ class LIFLayer(Layer):
         active = (self._spike_history >= self.refractory)
 
         # integrate (on active neurons)
-        self.v += torch.where(active, self.res * self.i, torch.zeros_like(self.i))
+        self.v += torch.where(active, self.leak_factor * self.res * self.i, torch.zeros_like(self.i))   # coef = 1/C
 
         # lateral inhibition
         dv = 5
