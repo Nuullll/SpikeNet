@@ -29,6 +29,9 @@ class Layer(object):
         self.o_rest = 0.0       # rest potential of output signal
         self.o_peak = 1.0       # peak potential of output signal when firing a spike
 
+        # adaptive thresholds
+        self.adaptive = False
+
     def process(self):
         """
         Processes the layer by one time step.
@@ -105,20 +108,23 @@ class LIFLayer(Layer):
     """
     Layer of LIF neurons.
     """
-    def __init__(self, size, v_rest, v_threshold, leak_factor, refractory):
+    def __init__(self, size, v_rest, v_th_rest, leak_factor, refractory):
         """
         :param size:            int         Number of neurons in this layer.
         :param v_rest:          float       Rest potential.
-        :param v_threshold:     float       Threshold for firing.
+        :param v_th_rest:       float       Rest threshold. (Adaptive threshold scheme)
         :param leak_factor:     float       Leak factor between 0 and 1.
         :param refractory:      int         Refractory period. (unit: time step)
         """
         self.size = size
         self.v_rest = v_rest
-        self.v_threshold = v_threshold
+        self.v_th_rest = v_th_rest
+        self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
+        self.th_tau = 200.              # time constant for threshold decaying
+        self.dvth = 15                   # threshold adaption factor
         self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
         self.refractory = refractory
-        self.res = 40e6                 # R = 40MOhm
+        self.res = 50
 
         # record the steps from last spike timing to now
         self._spike_history = torch.ones(size, dtype=torch.int) * refractory
@@ -146,6 +152,10 @@ class LIFLayer(Layer):
         """
         self._preprocess()
 
+        if self.adaptive:
+            # thresholds leak
+            self.v_th -= (self.v_th - self.v_th_rest) / self.th_tau
+
         # leak
         self.v -= self.leak_factor * (self.v - self.v_rest)
 
@@ -157,24 +167,33 @@ class LIFLayer(Layer):
         self.v += torch.where(active, self.leak_factor * self.res * self.i, torch.zeros_like(self.i))   # coef = 1/C
 
         # lateral inhibition
-        dv = 5
+        dv = 20
 
-        inds = (self.v - self.v_threshold).nonzero().squeeze()
+        candidates = (self.v >= self.v_th).nonzero()
 
-        perm = torch.randperm(inds.size(0))
+        if len(candidates) > 0:
+            inds = (self.v >= self.v_th).nonzero().squeeze(1)
 
-        for p in perm:
-            ind = inds[p]
-            overshoot = self.v[ind] - self.v_threshold
-            if overshoot < 0:
-                continue
+            perm = torch.randperm(inds.size(0))
 
-            mask = torch.ones_like(self.firing_mask)
-            mask.scatter_(0, ind, 0)
-            self.v.masked_scatter_(mask, self.v - dv).clamp_(min=self.v_rest)
+            for p in perm:
+                ind = inds[p]
+                overshoot = self.v[ind] - self.v_th[ind]
+                if overshoot < 0:
+                    continue
 
-        # fire
-        self.firing_mask = (self.v >= self.v_threshold)
+                mask = torch.ones_like(self.firing_mask)
+                mask.scatter_(0, ind, 0)
+                self.v.masked_scatter_(mask, self.v - dv).clamp_(min=self.v_rest)
+
+        # ready to fire
+        self.firing_mask = (self.v >= self.v_th)
+
+        if self.adaptive:
+            # thresholds integrate (on firing neurons)
+            self.v_th.masked_scatter_(self.firing_mask, self.v_th + self.dvth)
+
+        # fire and reset
         self._fire_and_reset()
 
     def _reset(self):

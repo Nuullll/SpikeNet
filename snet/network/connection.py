@@ -29,13 +29,13 @@ class Connection:
         self._last_post_spike_time = -torch.ones(self.post_layer.size)
 
         # STDP parameters
-        self.learn_rate_p = 0.11    # A+
-        self.learn_rate_m = 0.1     # A-
-        self.tau_p = 20               # 20ms
+        self.learn_rate_p = 0.04    # A+
+        self.learn_rate_m = 0.01    # A-
+        self.tau_p = 20              # 20ms
         self.tau_m = 20
-        self.decay = 1./20000
-        self.w_min = 0.
-        self.w_max = weight.max()
+        self.decay = 0.0001
+        self.w_min = 0.1
+        self.w_max = 1.
 
     def feed_forward(self):
         """
@@ -50,7 +50,8 @@ class Connection:
         """
 
         # decay first
-        # self.weight -= self.decay * (self.weight - self.w_min)
+        self.weight -= self.decay * (self.w_max - self.w_min)
+        self.weight.clamp_(min=self.w_min)
 
         # record new pre-spikes
         self._last_pre_spike_time.masked_fill_(self.pre_layer.firing_mask, time)

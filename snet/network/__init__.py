@@ -36,6 +36,9 @@ class NetworkBuilder:
         # initialize monitors
         self._init_monitors(monitors)
 
+        # default mode: training
+        self.network.training_mode()
+
     def _init_connections(self, weights):
         """
         Instantiate <Connection> objects.
@@ -80,6 +83,9 @@ class Network:
 
         self.time = 0.
 
+        self.training = True      # flag for inference or training
+
+
     def run(self, time):
         """
         Run simulation for given `time`.
@@ -93,8 +99,9 @@ class Network:
             # Update monitors
             self._update_monitors()
 
-            # STDP updates according to incoming new pre-spikes
-            self._update_on_pre_spikes(self.time + t)
+            if self.training:
+                # STDP updates according to incoming new pre-spikes
+                self._update_on_pre_spikes(self.time + t)
 
             # Feed forward
             self._feed_forward()
@@ -102,8 +109,9 @@ class Network:
             # Layers process
             self._process()
 
-            # STDP updates according to incoming new post-spikes
-            self._update_on_post_spikes(self.time + t)
+            if self.training:
+                # STDP updates according to incoming new post-spikes
+                self._update_on_post_spikes(self.time + t)
 
             # if not t % 200:
             #     # Display weight map
@@ -148,8 +156,21 @@ class Network:
         for lyr in self.layers.values():
             lyr.process()
 
-    def _update_weights(self):
+    def training_mode(self):
         """
-        Updates weights, according to rules config of <Connection>.
+        Turns on training mode.
         """
-        pass
+        self.training = True
+        for lyr in self.layers.values():
+            lyr.adaptive = True
+
+    def inference_mode(self):
+        """
+        Turns on inference mode.
+        """
+        self.training = False
+        for lyr in self.layers.values():
+            lyr.adaptive = False
+
+        for conn in self.connections.values():
+            conn.decay = 0.
