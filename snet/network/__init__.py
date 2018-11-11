@@ -60,10 +60,15 @@ class NetworkBuilder:
             mon = Monitor(target=self.network.layers[name], state_vars=state_vars)
             self.network.monitors[name] = mon
 
-    def build(self):
+    def build(self, training=True):
         """
         :return:    <Network>
         """
+        if training:
+            self.network.training_mode()
+        else:
+            self.network.inference_mode()
+
         return self.network
 
 
@@ -83,9 +88,6 @@ class Network:
 
         self.time = 0.
 
-        self.training = True      # flag for inference or training
-
-
     def run(self, time):
         """
         Run simulation for given `time`.
@@ -99,9 +101,8 @@ class Network:
             # Update monitors
             self._update_monitors()
 
-            if self.training:
-                # STDP updates according to incoming new pre-spikes
-                self._update_on_pre_spikes(self.time + t)
+            # STDP updates according to incoming new pre-spikes
+            self._update_on_pre_spikes(self.time + t)
 
             # Feed forward
             self._feed_forward()
@@ -109,9 +110,8 @@ class Network:
             # Layers process
             self._process()
 
-            if self.training:
-                # STDP updates according to incoming new post-spikes
-                self._update_on_post_spikes(self.time + t)
+            # STDP updates according to incoming new post-spikes
+            self._update_on_post_spikes(self.time + t)
 
             # if not t % 200:
             #     # Display weight map
@@ -160,17 +160,20 @@ class Network:
         """
         Turns on training mode.
         """
-        self.training = True
         for lyr in self.layers.values():
             lyr.adaptive = True
+            lyr.inhibition = True
+
+        for conn in self.connections.values():
+            conn.static = False
 
     def inference_mode(self):
         """
         Turns on inference mode.
         """
-        self.training = False
         for lyr in self.layers.values():
             lyr.adaptive = False
+            lyr.inhibition = False
 
         for conn in self.connections.values():
-            conn.decay = 0.
+            conn.static = True

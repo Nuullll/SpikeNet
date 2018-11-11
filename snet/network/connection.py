@@ -37,6 +37,9 @@ class Connection:
         self.w_min = 0.1
         self.w_max = 1.
 
+        # static mode (weight will not change)
+        self.static = False
+
     def feed_forward(self):
         """
         Fetches output of `pre_layer` and computes results as input of `post_layer`.
@@ -48,6 +51,8 @@ class Connection:
         """
         Updates weights when new pre-spikes come.
         """
+        if self.static:
+            return
 
         # decay first
         self.weight -= self.decay * (self.w_max - self.w_min)
@@ -73,6 +78,9 @@ class Connection:
         """
         Updates weights when new post-spikes come.
         """
+        if self.static:
+            return
+
         # record new post-spikes
         self._last_post_spike_time.masked_fill_(self.post_layer.firing_mask, time)
 
