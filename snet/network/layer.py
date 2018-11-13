@@ -126,9 +126,9 @@ class LIFLayer(Layer):
         self.v_rest = v_rest
         self.v_th_rest = v_th_rest
         self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
-        self.th_tau = 200.              # time constant for threshold decaying
-        self.dv_th = 15                   # threshold adaption factor
-        self.dv_inh = 20                # lateral inhibition factor
+        self.th_tau = 20.              # time constant for threshold decaying
+        self.dv_th = 5                   # threshold adaption factor
+        self.dv_inh = 10                # lateral inhibition factor
         self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
         self.refractory = refractory
         self.res = 50
@@ -178,30 +178,38 @@ class LIFLayer(Layer):
 
         # lateral inhibition
         if self.inhibition:
-            candidates = (self.v >= self.v_th).nonzero()
-
-            if len(candidates) > 0:
-                inds = (self.v >= self.v_th).nonzero().squeeze(1)
-
-                perm = torch.randperm(inds.size(0))
-
-                for p in perm:
-                    ind = inds[p]
-                    overshoot = self.v[ind] - self.v_th[ind]
-                    if overshoot < 0:
-                        continue
-
-                    mask = torch.ones_like(self.firing_mask)
-                    mask.scatter_(0, ind, 0)
-                    # self.v.masked_scatter_(mask, self.v - self.dv_inh).clamp_(min=self.v_rest)
-                    self.v.masked_fill_(mask, self.v_rest)
+            # candidates = (self.v >= self.v_th).nonzero()
+            #
+            # if len(candidates) > 0:
+            #     inds = (self.v >= self.v_th).nonzero().squeeze(1)
+            #
+            #     perm = torch.randperm(inds.size(0))
+            #
+            #     for p in perm:
+            #         ind = inds[p]
+            #         overshoot = self.v[ind] - self.v_th[ind]
+            #         if overshoot < 0:
+            #             continue
+            #
+            #         mask = torch.ones_like(self.firing_mask)
+            #         mask.scatter_(0, ind, 0)
+            #         # self.v.masked_scatter_(mask, self.v - self.dv_inh).clamp_(min=self.v_rest)
+            #         self.v.masked_fill_(mask, self.v_rest)
+            overshoot = self.v - self.v_th
+            _, idx = torch.sort(overshoot, descending=True)
+            if overshoot[idx[0]] > 0:
+                mask = torch.ones_like(self.firing_mask)
+                mask.scatter_(0, idx[0], 0)
+                # self.v.masked_fill_(mask, self.v_rest)
+                self.v = torch.where(mask, self.v - self.dv_inh, self.v)
 
         # ready to fire
         self.firing_mask = (self.v >= self.v_th)
 
         if self.adaptive:
             # thresholds integrate (on firing neurons)
-            self.v_th.masked_scatter_(self.firing_mask, self.v_th + self.dv_th)
+            # self.v_th = torch.where(self.firing_mask, self.v_th + self.dv_th, self.v_th)
+            self.v_th = torch.where(self.firing_mask, self.v, self.v_th)
 
         # fire and reset
         self._fire_and_reset()

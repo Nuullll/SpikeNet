@@ -29,12 +29,12 @@ class Connection:
         self._last_post_spike_time = -torch.ones(self.post_layer.size)
 
         # STDP parameters
-        self.learn_rate_p = 0.04    # A+
-        self.learn_rate_m = 0.01    # A-
-        self.tau_p = 20              # 20ms
-        self.tau_m = 20
-        self.decay = 0.0001
-        self.w_min = 0.1
+        self.learn_rate_p = 0.01    # A+
+        self.learn_rate_m = 0.012    # A-
+        self.tau_p = 10              # ms
+        self.tau_m = 8
+        self.decay = 3e-5
+        self.w_min = 0.2
         self.w_max = 1.
 
         # static mode (weight will not change)
