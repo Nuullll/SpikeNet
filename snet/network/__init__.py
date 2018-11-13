@@ -121,6 +121,12 @@ class Network:
 
         self.time += time
 
+    def after_batch(self):
+        """
+        Updates network after one batch, e.g. adapts thresholds.
+        """
+
+
     def _update_monitors(self):
         """
         Feeds state values to monitors.

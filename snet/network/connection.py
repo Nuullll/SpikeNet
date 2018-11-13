@@ -29,11 +29,11 @@ class Connection:
         self._last_post_spike_time = -torch.ones(self.post_layer.size)
 
         # STDP parameters
-        self.learn_rate_p = 0.01    # A+
-        self.learn_rate_m = 0.012    # A-
+        self.learn_rate_p = 0.001    # A+
+        self.learn_rate_m = 0.001    # A-
         self.tau_p = 10              # ms
-        self.tau_m = 8
-        self.decay = 3e-5
+        self.tau_m = 10
+        self.decay = 0.0001
         self.w_min = 0.2
         self.w_max = 1.
 
@@ -55,7 +55,7 @@ class Connection:
             return
 
         # decay first
-        self.weight -= self.decay * (self.w_max - self.w_min)
+        self.weight -= self.decay * (self.weight - self.w_min)
         self.weight.clamp_(min=self.w_min)
 
         # record new pre-spikes

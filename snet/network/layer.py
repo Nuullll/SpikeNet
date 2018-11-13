@@ -126,12 +126,12 @@ class LIFLayer(Layer):
         self.v_rest = v_rest
         self.v_th_rest = v_th_rest
         self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
-        self.th_tau = 20.              # time constant for threshold decaying
-        self.dv_th = 5                   # threshold adaption factor
+        self.th_tau = 100.              # time constant for threshold decaying
+        self.dv_th = 0.5                   # threshold adaption factor
         self.dv_inh = 10                # lateral inhibition factor
         self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
         self.refractory = refractory
-        self.res = 50
+        self.res = 2.
 
         # record the steps from last spike timing to now
         self._spike_history = torch.ones(size, dtype=torch.int) * refractory
@@ -200,8 +200,8 @@ class LIFLayer(Layer):
             if overshoot[idx[0]] > 0:
                 mask = torch.ones_like(self.firing_mask)
                 mask.scatter_(0, idx[0], 0)
-                # self.v.masked_fill_(mask, self.v_rest)
-                self.v = torch.where(mask, self.v - self.dv_inh, self.v)
+                self.v.masked_fill_(mask, self.v_rest)
+                # self.v = torch.where(mask, self.v - self.dv_inh, self.v)
 
         # ready to fire
         self.firing_mask = (self.v >= self.v_th)
