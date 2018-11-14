@@ -141,7 +141,7 @@ class LIFLayer(Layer):
         self.v_th_rest = v_th_rest
         self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
         self.th_tau = 100.              # time constant for threshold decaying
-        self.dv_th = 0.05                   # threshold adaption factor
+        self.dv_th = 0.03                   # threshold adaption factor
         self.dv_inh = 10                # lateral inhibition factor
         self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
         self.refractory = refractory
@@ -248,7 +248,7 @@ class LIFLayer(Layer):
         mask = torch.zeros_like(self.firing_mask)
         mask.scatter_(0, idx, 1)
 
-        d = -self.dv_th * torch.ones_like(self.v)
+        d = -self.dv_th * torch.ones_like(self.v) / (self.size - 1)
         d.masked_fill_(mask, self.dv_th)
 
         self.v_th += d

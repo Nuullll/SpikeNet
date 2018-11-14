@@ -31,9 +31,9 @@ class Connection:
         # STDP parameters
         self.learn_rate_p = 0.001    # A+
         self.learn_rate_m = 0.001    # A-
-        self.tau_p = 10              # ms
-        self.tau_m = 10
-        self.decay = 0.0001
+        self.tau_p = 20              # ms
+        self.tau_m = 20
+        self.decay = 0.0002
         self.w_min = 0.2
         self.w_max = 1.
 
