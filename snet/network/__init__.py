@@ -125,7 +125,9 @@ class Network:
         """
         Updates network after one batch, e.g. adapts thresholds.
         """
-
+        for lyr in self.layers.values():
+            lyr.adapt_thresholds()
+            lyr.clear_spike_counts()
 
     def _update_monitors(self):
         """
