@@ -6,8 +6,8 @@
 # @Last modified time: 27-Sep-2018
 
 
-import math
 from .layer import *
+from ..settings import ConnectionConfig
 
 
 class Connection:
@@ -29,13 +29,13 @@ class Connection:
         self._last_post_spike_time = -torch.ones(self.post_layer.size)
 
         # STDP parameters
-        self.learn_rate_p = 0.001    # A+
-        self.learn_rate_m = 0.001    # A-
-        self.tau_p = 20              # ms
-        self.tau_m = 20
-        self.decay = 0.0002
-        self.w_min = 0.2
-        self.w_max = 1.
+        self.learn_rate_p = ConnectionConfig.LEARN_RATE_P    # A+
+        self.learn_rate_m = ConnectionConfig.LEARN_RATE_M    # A-
+        self.tau_p = ConnectionConfig.TAU_P              # ms
+        self.tau_m = ConnectionConfig.TAU_M
+        self.decay = ConnectionConfig.DECAY
+        self.w_min = ConnectionConfig.W_MIN
+        self.w_max = ConnectionConfig.W_MAX
 
         # static mode (weight will not change)
         self.static = False

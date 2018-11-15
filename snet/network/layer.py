@@ -7,6 +7,7 @@
 
 
 import torch
+from ..settings import LayerConfig, LIFLayerConfig
 
 
 class Layer(object):
@@ -26,8 +27,8 @@ class Layer(object):
         self.firing_mask = torch.zeros_like(state, dtype=torch.uint8)
 
         # global config for <Layer> class
-        self.o_rest = 0.0       # rest potential of output signal
-        self.o_peak = 1.0       # peak potential of output signal when firing a spike
+        self.o_rest = LayerConfig.O_REST       # rest potential of output signal
+        self.o_peak = LayerConfig.O_PEAK       # peak potential of output signal when firing a spike
 
         # adaptive thresholds
         self.adaptive = False
@@ -125,36 +126,33 @@ class LIFLayer(Layer):
     """
     Layer of LIF neurons.
     """
-    def __init__(self, size, v_rest, v_th_rest, leak_factor, refractory):
+    def __init__(self, size):
         """
         :param size:            int         Number of neurons in this layer.
-        :param v_rest:          float       Rest potential.
-        :param v_th_rest:       float       Rest threshold. (Adaptive threshold scheme)
-        :param leak_factor:     float       Leak factor between 0 and 1.
-        :param refractory:      int         Refractory period. (unit: time step)
         """
-        # the membrane potential serves as the internal state
-        super(LIFLayer, self).__init__(state=torch.ones(size) * v_rest)
-
         self.size = size
-        self.v_rest = v_rest
-        self.v_th_rest = v_th_rest
+        self.v_rest = LIFLayerConfig.V_REST
+        self.v_th_rest = LIFLayerConfig.V_TH_REST
         self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
-        self.th_tau = 100.              # time constant for threshold decaying
-        self.dv_th = 0.03                   # threshold adaption factor
-        self.dv_inh = 10                # lateral inhibition factor
-        self.leak_factor = leak_factor  # tau = 1/leak_factor = R * C
-        self.refractory = refractory
-        self.res = 2.
+        # self.th_tau = 100.              # time constant for threshold decaying
+        self.dv_th = LIFLayerConfig.DV_TH                   # threshold adaption factor
+        # self.dv_inh = 10                # lateral inhibition factor
+        self.leak_factor = LIFLayerConfig.LEAK_FACTOR  # tau = 1/leak_factor = R * C
+        self.refractory = LIFLayerConfig.REFRACTORY
+        self.res = LIFLayerConfig.RES
+        self.winners = LIFLayerConfig.WINNERS                # winner-take-all: number of winners
 
         # record the steps from last spike timing to now
-        self._spike_history = torch.ones(size, dtype=torch.int) * refractory
+        self._spike_history = torch.ones(size, dtype=torch.int) * self.refractory
 
         # adaptive threshold
         self.adaptive = True
 
         # lateral inhibition
         self.inhibition = True
+
+        # the membrane potential serves as the internal state
+        super(LIFLayer, self).__init__(state=torch.ones(size) * self.v_rest)
 
     @property
     def v(self):
@@ -209,11 +207,20 @@ class LIFLayer(Layer):
             #         mask.scatter_(0, ind, 0)
             #         # self.v.masked_scatter_(mask, self.v - self.dv_inh).clamp_(min=self.v_rest)
             #         self.v.masked_fill_(mask, self.v_rest)
+
             overshoot = self.v - self.v_th
-            _, idx = torch.sort(overshoot, descending=True)
-            if overshoot[idx[0]] > 0:
+            overshoot_mask = overshoot > 0
+            _, indices = torch.sort(overshoot, descending=True)
+
+            # indices = indices[:self.winners]
+            indices = indices[:round(self.winners * overshoot_mask.sum().item() / self.size)]
+            overshoot_mask = overshoot_mask.index_select(0, indices)
+
+            indices = indices.masked_select(overshoot_mask)
+
+            if len(indices) > 0:
                 mask = torch.ones_like(self.firing_mask)
-                mask.scatter_(0, idx[0], 0)
+                mask.scatter_(0, indices, 0)
                 self.v.masked_fill_(mask, self.v_rest)
                 # self.v = torch.where(mask, self.v - self.dv_inh, self.v)
 
@@ -240,16 +247,17 @@ class LIFLayer(Layer):
         """
         Adapts thresholds.
         """
-        # increase the threshold of the most recent active neuron, according to self.spike_counts
-        _, indices = torch.sort(self.spike_counts, descending=True)
+        if self.adaptive:
+            # increase the threshold of the most recent active neuron, according to self.spike_counts
+            _, indices = torch.sort(self.spike_counts, descending=True)
 
-        idx = indices[0]
+            idx = indices[:self.winners]
 
-        mask = torch.zeros_like(self.firing_mask)
-        mask.scatter_(0, idx, 1)
+            mask = torch.zeros_like(self.firing_mask)
+            mask.scatter_(0, idx, 1)
 
-        d = -self.dv_th * torch.ones_like(self.v) / (self.size - 1)
-        d.masked_fill_(mask, self.dv_th)
+            d = -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners
+            d.masked_fill_(mask, self.dv_th)
 
-        self.v_th += d
-        self.v_th.clamp_(min=self.v_th_rest)
+            self.v_th += d
+            self.v_th.clamp_(min=self.v_th_rest)

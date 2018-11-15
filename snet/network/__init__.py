@@ -6,26 +6,73 @@
 # @Last modified time: 04-Sep-2018
 
 
+import torch
 from .layer import *
 from .connection import *
 from .monitor import *
+from ..settings import *
 
 import matplotlib.pyplot as plt
+
+
+class NetworkLoader(object):
+    """
+    Load network from settings file.
+    """
+    def load_default(self, weight_map=None):
+        # Specify sizes
+        sizes = {
+            'I': NetworkConfig.INPUT_NEURON_NUMBER,
+            'O': NetworkConfig.OUTPUT_NEURON_NUMBER
+        }
+
+        # Specify layers
+        # {name: <Layer>}
+        layers = {
+            'I': PoissonLayer(firing_step=torch.zeros(sizes['I'])),
+            'O': LIFLayer(sizes['O'])
+        }
+
+        # Specify weights
+        # {(source, target): weight}
+        # will be converted into
+        # {(source, target): <Connection>}
+        if weight_map is None:
+            weights = {
+                ('I', 'O'): ConnectionConfig.W_MIN + (ConnectionConfig.W_MAX - ConnectionConfig.W_MIN) * torch.rand(
+                    sizes['I'], sizes['O'])
+            }
+        else:
+            weights = {
+                ('I', 'O'): weight_map
+            }
+
+        # Specify monitors (monitors will be instantiated later during the building process of network)
+        # {name: [state_vars]}
+        monitors = {
+            'I': ['o'],
+            'O': ['o']
+        }
+
+        # Config network
+        builder = NetworkBuilder(layers=layers, weights=weights, monitors=monitors)
+        network = builder.build()
+
+        return network
 
 
 class NetworkBuilder:
     """
     Network builder, with given <Layer>s, <torch.Tensor> weights, <Monitor>s.
     """
-    def __init__(self, layers, weights, monitors, dt=1.0):
+    def __init__(self, layers, weights, monitors):
         """
         Initialize builder.
         :param layers:      dict        {name: <Layer>}
         :param weights:     dict        {(pre_layer_name, post_layer_name): weights}
         :param monitors:    dict        {name: [state_vars]}
-        :param dt:          float       Simulation time step.
         """
-        self.network = Network(dt=dt)
+        self.network = Network()
 
         # initialize layers
         self.network.layers = layers
@@ -76,7 +123,7 @@ class Network:
     """
     Responsible for interaction simulation among neurons and synapses.
     """
-    def __init__(self, dt=1.0):
+    def __init__(self):
         """
         Initialize <Network> instance, with a configuration.
         """
@@ -84,7 +131,7 @@ class Network:
         self.connections = {}       # {(pre_layer_name, post_layer_name): <Connection>}
         self.monitors = {}          # {layer_name: <Monitor>}
 
-        self.dt = dt
+        self.dt = NetworkConfig.DT_MS
 
         self.time = 0.
 
@@ -181,7 +228,7 @@ class Network:
         """
         for lyr in self.layers.values():
             lyr.adaptive = False
-            lyr.inhibition = False
+            # lyr.inhibition = False
 
         for conn in self.connections.values():
             conn.static = True
