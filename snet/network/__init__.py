@@ -50,8 +50,8 @@ class NetworkLoader(object):
         # Specify monitors (monitors will be instantiated later during the building process of network)
         # {name: [state_vars]}
         monitors = {
-            'I': ['o'],
-            'O': ['o']
+            # 'I': ['o'],
+            # 'O': ['o']
         }
 
         # Config network
