@@ -7,7 +7,7 @@ class NetworkConfig(object):
     INPUT_IMAGE_WIDTH = 11
     INPUT_IMAGE_HEIGHT = 11
     INPUT_NEURON_NUMBER = INPUT_IMAGE_WIDTH * INPUT_IMAGE_HEIGHT
-    OUTPUT_NEURON_NUMBER = 6
+    OUTPUT_NEURON_NUMBER = 14
 
     # duration per stimuli (ms)
     DURATION_PER_TRAINING_IMAGE = 100
@@ -33,8 +33,8 @@ class LIFLayerConfig(LayerConfig):
 
 
 class ConnectionConfig(object):
-    LEARN_RATE_P = 5e-4
-    LEARN_RATE_M = 5e-4
+    LEARN_RATE_P = 6e-4
+    LEARN_RATE_M = 6e-4
     TAU_P = 20
     TAU_M = 20
     DECAY = 1e-4

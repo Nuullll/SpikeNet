@@ -260,4 +260,4 @@ class LIFLayer(Layer):
             d.masked_fill_(mask, self.dv_th)
 
             self.v_th += d
-            self.v_th.clamp_(min=self.v_th_rest)
+            # self.v_th.clamp_(min=self.v_th_rest)
