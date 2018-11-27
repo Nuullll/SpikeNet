@@ -11,6 +11,8 @@ from .layer import *
 from .connection import *
 from .monitor import *
 from ..settings import *
+from localconfig import LocalConfig
+import os.path
 
 import matplotlib.pyplot as plt
 
@@ -59,6 +61,79 @@ class NetworkLoader(object):
         network = builder.build()
 
         return network
+
+    def from_cfg(self, config=None, weight_map=None):
+        """
+        Loads network parameters from <configparser.ConfigParser> object.
+        :param config:      <LocalConfig>
+        :param weight_map:  <torch.tensor>
+        :return:            <Network>
+        """
+        if config is None:
+            default_path = os.path.dirname(__file__)
+            config = LocalConfig(os.path.join(default_path, 'template.ini'))
+
+        config = self._infer_fields(config)
+
+        # Specify sizes
+        sizes = {
+            'I': config.network.input_neuron_number,
+            'O': config.network.output_neuron_number
+        }
+
+        # Specify layers
+        # {name: <Layer>}
+        layers = {
+            'I': PoissonLayer(firing_step=torch.zeros(sizes['I'])),
+            'O': LIFLayer(sizes['O'])
+        }
+
+        # Specify weights
+        # {(source, target): weight}
+        # will be converted into
+        # {(source, target): <Connection>}
+        if weight_map is None:
+            if config.synapse.init_weights == 'min':
+                weight_map = config.synapse.w_min * torch.ones(sizes['I'], sizes['O'])
+            elif config.synapse.init_weights == 'max':
+                weight_map = config.synapse.w_max * torch.ones(sizes['I'], sizes['O'])
+            elif config.synapse.init_weights == 'random':
+                weight_map = config.synapse.w_min + (config.synapse.w_max - config.synapse.w_min) \
+                    * torch.rand(sizes['I'], sizes['O'])
+            else:
+                raise ValueError('Wrong configuration for synapse.init_weights')
+
+        weights = {
+            ('I', 'O'): weight_map
+        }
+
+        # Specify monitors (monitors will be instantiated later during the building process of network)
+        # {name: [state_vars]}
+        monitors = {
+            # 'I': ['o'],
+            # 'O': ['o']
+        }
+
+        # Config network
+        builder = NetworkBuilder(layers=layers, weights=weights, monitors=monitors)
+        network = builder.build()
+
+        return network
+
+    def _infer_fields(self, config):
+        """
+        Infers additional fields in config.
+        :param config:      <LocalConfig>
+        :return:            <LocalConfig>
+        """
+        # infer additional fields
+        config.network.dt_s = config.network.dt_ms / 1000
+        config.network.input_neuron_number = config.input.image_width * config.input.image_height
+        config.synapse.learn_rate_p_eff = config.synapse.learn_rate_p * config.synapse.learn_rate_p_scaling
+        config.synapse.learn_rate_m_eff = config.synapse.learn_rate_m * config.synapse.learn_rate_m_scaling
+        config.synapse.decay_eff = config.synapse.decay * config.synapse.decay_scaling
+
+        return config
 
 
 class NetworkBuilder:
