@@ -1,5 +1,11 @@
+
+try:
+    import telemessage
+    notification = True
+except ImportError:
+    notification = False
+
 import torch
-import telemessage
 import os.path
 import snet
 from snet.examples.mnist.helper.dataloader import MNISTLoader
@@ -66,8 +72,9 @@ def train(training_images, training_labels, cfg):
         logging.warning('Result folder %s already exists, press enter to override history result.' % folder)
         input()
 
-    # send message
-    telemessage.notify_me('Training job started.')
+    if notification:
+        # send message
+        telemessage.notify_me('Training job started.')
 
     # build network
     network = snet.NetworkLoader().from_cfg(config=cfg)
@@ -97,14 +104,16 @@ def train(training_images, training_labels, cfg):
     # save training config
     cfg.save(os.path.join(folder, 'training.ini'))
 
-    telemessage.notify_me('Training job completed.')
+    if notification:
+        telemessage.notify_me('Training job completed.')
 
     return folder
 
 
 def evaluate(training_images, training_labels, testing_images, testing_labels, result_folder):
-    # send message to my telegram account
-    telemessage.notify_me('Evaluation job started.')
+    if notification:
+        # send message to my telegram account
+        telemessage.notify_me('Evaluation job started.')
 
     # load final weight after training
     w = torch.load(os.path.join(result_folder, 'final_weight.pt'))
@@ -184,7 +193,8 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
         hit = (predict_labels == labels.numpy()).sum()
         logging.info('Hit/total = %d/%d = %.4f' % (hit, n, hit / n))
 
-    telemessage.notify_me('Evaluation job completed, with test accuracy %.4f' % (hit / n))
+    if notification:
+        telemessage.notify_me('Evaluation job completed, with test accuracy %.4f' % (hit / n))
 
 
 if __name__ == '__main__':
@@ -192,7 +202,7 @@ if __name__ == '__main__':
 
     tr_i, tr_l, te_i, te_l = load_mnist(config)
 
-    # result_folder = train(tr_i, tr_l, config)
-    result_folder = os.path.join(RESULTS_DIR, cfg_abstract(config))
+    result_folder = train(tr_i, tr_l, config)
+    # result_folder = os.path.join(RESULTS_DIR, cfg_abstract(config))
 
     evaluate(tr_i, tr_l, te_i, te_l, result_folder)
