@@ -10,7 +10,6 @@ import torch
 from .layer import *
 from .connection import *
 from .monitor import *
-from ..settings import *
 from localconfig import LocalConfig
 import os.path
 
@@ -18,49 +17,6 @@ import matplotlib.pyplot as plt
 
 
 class NetworkLoader(object):
-    """
-    Load network from settings file.
-    """
-    def load_default(self, weight_map=None):
-        # Specify sizes
-        sizes = {
-            'I': NetworkConfig.INPUT_NEURON_NUMBER,
-            'O': NetworkConfig.OUTPUT_NEURON_NUMBER
-        }
-
-        # Specify layers
-        # {name: <Layer>}
-        layers = {
-            'I': PoissonLayer(firing_step=torch.zeros(sizes['I'])),
-            'O': LIFLayer(sizes['O'])
-        }
-
-        # Specify weights
-        # {(source, target): weight}
-        # will be converted into
-        # {(source, target): <Connection>}
-        if weight_map is None:
-            weights = {
-                ('I', 'O'): ConnectionConfig.W_MIN + (ConnectionConfig.W_MAX - ConnectionConfig.W_MIN) * torch.rand(
-                    sizes['I'], sizes['O'])
-            }
-        else:
-            weights = {
-                ('I', 'O'): weight_map
-            }
-
-        # Specify monitors (monitors will be instantiated later during the building process of network)
-        # {name: [state_vars]}
-        monitors = {
-            # 'I': ['o'],
-            # 'O': ['o']
-        }
-
-        # Config network
-        builder = NetworkBuilder(layers=layers, weights=weights, monitors=monitors)
-        network = builder.build()
-
-        return network
 
     def from_cfg(self, config=None, weight_map=None):
         """
@@ -84,8 +40,8 @@ class NetworkLoader(object):
         # Specify layers
         # {name: <Layer>}
         layers = {
-            'I': PoissonLayer(firing_step=torch.zeros(sizes['I'])),
-            'O': LIFLayer(sizes['O'])
+            'I': PoissonLayer(firing_step=torch.zeros(sizes['I']), config=config),
+            'O': LIFLayer(sizes['O'], config=config)
         }
 
         # Specify weights
@@ -115,7 +71,7 @@ class NetworkLoader(object):
         }
 
         # Config network
-        builder = NetworkBuilder(layers=layers, weights=weights, monitors=monitors)
+        builder = NetworkBuilder(layers=layers, weights=weights, monitors=monitors, config=config)
         network = builder.build()
 
         return network
@@ -140,14 +96,14 @@ class NetworkBuilder:
     """
     Network builder, with given <Layer>s, <torch.Tensor> weights, <Monitor>s.
     """
-    def __init__(self, layers, weights, monitors):
+    def __init__(self, layers, weights, monitors, config):
         """
         Initialize builder.
         :param layers:      dict        {name: <Layer>}
         :param weights:     dict        {(pre_layer_name, post_layer_name): weights}
         :param monitors:    dict        {name: [state_vars]}
         """
-        self.network = Network()
+        self.network = Network(config)
 
         # initialize layers
         self.network.layers = layers
@@ -170,7 +126,7 @@ class NetworkBuilder:
             pre_layer_name, post_layer_name = key
             pre_layer = self.network.layers[pre_layer_name]
             post_layer = self.network.layers[post_layer_name]
-            conn = Connection(pre_layer=pre_layer, post_layer=post_layer, weight=weight)
+            conn = Connection(pre_layer=pre_layer, post_layer=post_layer, weight=weight, config=self.network.config)
             self.network.connections[(pre_layer_name, post_layer_name)] = conn
 
     def _init_monitors(self, monitors):
@@ -198,7 +154,7 @@ class Network:
     """
     Responsible for interaction simulation among neurons and synapses.
     """
-    def __init__(self):
+    def __init__(self, config):
         """
         Initialize <Network> instance, with a configuration.
         """
@@ -206,9 +162,15 @@ class Network:
         self.connections = {}       # {(pre_layer_name, post_layer_name): <Connection>}
         self.monitors = {}          # {layer_name: <Monitor>}
 
-        self.dt = NetworkConfig.DT_MS
-
         self.time = 0.
+
+        self.config = config
+
+        # for performance
+        self.dt_ms = self.config.network.dt_ms
+        self.dt_s = self.dt_ms / 1000
+        self.input_firing_rate = self.config.input.average_firing_rate
+        self.input_neuron_number = self.config.network.input_neuron_number
 
     def run(self, time):
         """
@@ -216,7 +178,7 @@ class Network:
         :param time:        float       Simulation time. (NOT steps)
         """
         # Total simulation steps
-        steps = int(time / self.dt)
+        steps = int(time / self.dt_ms)
 
         # Do simulation
         for t in range(steps):
@@ -234,12 +196,6 @@ class Network:
 
             # STDP updates according to incoming new post-spikes
             self._update_on_post_spikes(self.time + t)
-
-            # if not t % 200:
-            #     # Display weight map
-            #     synapse = self.connections[('I', 'O')]
-            #     plt.imshow(synapse.weight.numpy(), cmap='Purples', vmin=synapse.w_min, vmax=synapse.w_max, aspect='auto')
-            #     plt.pause(0.00001)
 
         self.time += time
 
@@ -307,3 +263,43 @@ class Network:
 
         for conn in self.connections.values():
             conn.static = True
+
+    def plot_weight_map(self, connection_name, pause_interval):
+        """
+        Plots weight map of the desired connection.
+        :param connection_name:     <tuple>     e.g. ('I', 'O')
+        :param pause_interval:      <float>     seconds of pausing time for one plot
+        """
+        self.connections[connection_name].plot_weight_map(pause_interval)
+
+    def poisson_encoding(self, image):
+        """
+        Encodes a single image in Poisson fashion.
+        :param image:           <torch.tensor>
+        :return: firing_step    <torch.tensor>
+        """
+        image.clamp_(min=1)
+        firing_rate = image.float() * self.input_firing_rate * self.input_neuron_number / image.float().sum()
+
+        firing_step = torch.div(1 / self.dt_s * torch.ones_like(firing_rate), firing_rate)
+
+        return firing_step.long()
+
+    def export_cfg(self):
+        """
+        Exports a <LocalConfig> object according to current network attributes.
+        :return:                <LocalConfig>
+        """
+        for lyr in self.layers.values():
+            lyr.update_cfg()
+
+        for conn in self.connections.values():
+            conn.update_cfg()
+
+        self._update_cfg()
+
+        return self.config
+
+    def _update_cfg(self):
+        # mutable config
+        self.config.input.average_firing_rate = self.input_firing_rate
