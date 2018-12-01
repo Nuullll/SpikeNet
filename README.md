@@ -12,7 +12,9 @@ SNN simulation framework.
 
 # TODO
 
+- [ ] SVM probability output.
 - [ ] Export evaluation result.
+- [ ] Log average input current strength on Output layer.
 - [ ] Input coding: Poisson distribution.
 - [ ] Multiple trails.
 - [ ] 0-2 trail algorithm baseline parameters.
