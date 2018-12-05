@@ -219,11 +219,12 @@ class LIFLayer(Layer):
             overshoot_mask = overshoot > 0
             _, indices = torch.sort(overshoot, descending=True)
 
-            # indices = indices[:self.winners]
-            indices = indices[:round(self.winners * overshoot_mask.sum().item() / self.size)]
             overshoot_mask = overshoot_mask.index_select(0, indices)
 
             indices = indices.masked_select(overshoot_mask)
+
+            indices = indices[:self.winners]
+            # indices = indices[:round(self.winners * overshoot_mask.sum().item() / self.size)]
 
             if len(indices) > 0:
                 mask = torch.ones_like(self.firing_mask)

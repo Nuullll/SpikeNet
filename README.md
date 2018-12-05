@@ -12,8 +12,9 @@ SNN simulation framework.
 
 # TODO
 
-- [ ] SVM probability output.
+- [ ] <del>SVM probability output.</del>
 - [ ] Export evaluation result.
+- [ ] Random neuron winner.
 - [ ] Log average input current strength on Output layer.
 - [ ] Input coding: Poisson distribution.
 - [ ] Multiple trails.

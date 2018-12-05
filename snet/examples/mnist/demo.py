@@ -13,6 +13,7 @@ from localconfig import LocalConfig
 from sklearn import svm
 import numpy as np
 import logging
+import collections
 logging.basicConfig(level=logging.INFO)
 
 
@@ -35,7 +36,9 @@ def cfg_abstract(cfg, prefix='', suffix=''):
         suffix = '.' + suffix
 
     return f"{prefix}{cfg.input.start_category}-{cfg.input.end_category}.{cfg.network.output_neuron_number}out." \
-           f"{cfg.lif_layer.winners}winners.{cfg.lif_layer.dv_th}dvth.{cfg.synapse.decay_scaling}decay-scaling" \
+           f"{cfg.lif_layer.winners}winners.{cfg.lif_layer.dv_th}dvth.{cfg.synapse.decay_scaling}decay-scaling." \
+           f"{cfg.synapse.learn_rate_p_scaling}learn-scaling.{cfg.lif_layer.res}res." \
+           f"{cfg.input.average_firing_rate}input-rate" \
            f"{suffix}"
 
 
@@ -164,37 +167,61 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
         network.after_batch()
 
     # SVM training
-    clf = svm.SVC(gamma='scale')
+    clf = svm.SVC(gamma='scale', probability=True)
     clf.fit(training_responses, training_labels)
 
-    for name in ['training', 'testing']:
-        if name == 'training':
-            responses = training_responses
-            labels = training_labels
-        else:
-            responses = testing_responses
-            labels = testing_labels
+    def get_accuracy(classifier, samples, sample_labels, trail_name):
+        result = collections.OrderedDict()
 
-        n = len(labels)
+        result['Trail'] = trail_name
 
-        # SVM predicting
-        predict_labels = clf.predict(responses)
+        n = len(samples)
 
-        logging.info("Accuracy on %s set:" % name)
+        # predict labels
+        predict_labels = classifier.predict(samples)
 
-        # count
-        for label in range(cfg.input.start_category, cfg.input.end_category + 1):
-            indices = np.nonzero(labels.numpy() == label)
-            p = predict_labels[indices]
-            h = (p == label).sum()
-            total = indices[0].shape[0]
-            logging.info('Label %d: hit/total = %d/%d = %.4f' % (label, h, total, h / total))
+        # predict probabilities
+        probas = classifier.predict_proba(samples)
 
-        hit = (predict_labels == labels.numpy()).sum()
-        logging.info('Hit/total = %d/%d = %.4f' % (hit, n, hit / n))
+        acc_on_classes = collections.OrderedDict()
+        for lbl in range(cfg.input.start_category, cfg.input.end_category + 1):
+            indices = np.nonzero(sample_labels.numpy() == lbl)
+            h = (predict_labels[indices] == lbl).sum()
+            t = indices[0].shape[0]
+            proba_mean = probas[indices].mean(axis=0)
+
+            acc_on_classes[lbl] = (h, t, h / t, proba_mean)
+
+        h = (predict_labels == sample_labels.numpy()).sum()
+        acc_summary = (h, n, h/n)
+
+        result['Acc. of each class'] = acc_on_classes
+        result['Acc. summary'] = acc_summary
+
+        formatted_str = ''
+        # serialize result
+        for key, value in result.items():
+            if isinstance(value, collections.OrderedDict):
+                formatted_str += f'{key}:\n'
+                for k, v in value.items():
+                    formatted_str += f'    {k}: {v}\n'
+            else:
+                formatted_str += f'{key}: {value}\n'
+
+        return formatted_str
+
+    training_result = get_accuracy(clf, training_responses, training_labels, 'Training')
+    testing_result = get_accuracy(clf, testing_responses, testing_labels, 'Testing')
+
+    logging.info(training_result)
+    logging.info(testing_result)
+
+    with open(os.path.join(result_folder, 'result.txt'), 'w') as f:
+        f.write(training_result)
+        f.write(testing_result)
 
     if notification:
-        telemessage.notify_me('Evaluation job completed, with test accuracy %.4f' % (hit / n))
+        telemessage.notify_me('Evaluation job completed, summary: \n %s \n %s' % (training_result, testing_result))
 
 
 if __name__ == '__main__':
