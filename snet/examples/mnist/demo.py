@@ -170,10 +170,10 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
     clf = svm.SVC(gamma='scale', probability=True)
     clf.fit(training_responses, training_labels)
 
-    def get_accuracy(classifier, samples, sample_labels, trail_name):
+    def get_accuracy(classifier, samples, sample_labels, trial_name):
         result = collections.OrderedDict()
 
-        result['Trail'] = trail_name
+        result['Trial'] = trial_name
 
         n = len(samples)
 
@@ -208,20 +208,20 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
             else:
                 formatted_str += f'{key}: {value}\n'
 
-        return formatted_str
+        return result, formatted_str
 
-    training_result = get_accuracy(clf, training_responses, training_labels, 'Training')
-    testing_result = get_accuracy(clf, testing_responses, testing_labels, 'Testing')
+    training_result, training_summary = get_accuracy(clf, training_responses, training_labels, 'Training')
+    testing_result, testing_summary = get_accuracy(clf, testing_responses, testing_labels, 'Testing')
 
-    logging.info(training_result)
-    logging.info(testing_result)
+    logging.info(training_summary)
+    logging.info(testing_summary)
 
     with open(os.path.join(result_folder, 'result.txt'), 'w') as f:
-        f.write(training_result)
-        f.write(testing_result)
+        f.write(training_summary)
+        f.write(testing_summary)
 
     if notification:
-        telemessage.notify_me('Evaluation job completed, summary: \n %s \n %s' % (training_result, testing_result))
+        telemessage.notify_me('Evaluation job completed, summary: \n %s \n %s' % (training_summary, testing_summary))
 
 
 if __name__ == '__main__':
