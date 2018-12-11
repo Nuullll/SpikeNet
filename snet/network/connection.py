@@ -9,6 +9,7 @@
 from .layer import *
 import matplotlib.pyplot as plt
 import math
+from snet.device import RRAM_device_variation
 
 
 class Connection:
@@ -42,6 +43,7 @@ class Connection:
         self.tau_m = self.config.synapse.tau_m
         self.w_min = self.config.synapse.w_min
         self.w_max = self.config.synapse.w_max
+        self.variation = self.config.synapse.variation
 
     def feed_forward(self):
         """
@@ -49,6 +51,9 @@ class Connection:
         """
         pre = self.pre_layer.o
         self.post_layer.i = torch.matmul(pre, self.weight)
+
+    def _clamp(self):
+        self.weight.clamp_(min=self.w_min, max=self.w_max)
 
     def update_on_pre_spikes(self, time):
         """
@@ -58,8 +63,9 @@ class Connection:
             return
 
         # decay first
-        self.weight -= self.decay * (self.weight - self.w_min)
-        self.weight.clamp_(min=self.w_min)
+        dw = self.decay * (self.weight - self.w_min)
+        self.weight -= RRAM_device_variation(self.variation, dw)
+        self._clamp()
 
         # record new pre-spikes
         self._last_pre_spike_time.masked_fill_(self.pre_layer.firing_mask, time)
@@ -75,7 +81,8 @@ class Connection:
         # weights decrease, because pre-spikes come after post-spikes
         dw = self.learn_rate_m * (self.weight - self.w_min) * torch.exp(-dt/self.tau_m)
         dw.masked_fill_(~active, 0)
-        self.weight -= dw
+        self.weight -= RRAM_device_variation(self.variation, dw)
+        self._clamp()
 
     def update_on_post_spikes(self, time):
         """
@@ -98,7 +105,8 @@ class Connection:
         # weights increase, because post-spikes come after pre-spikes
         dw = self.learn_rate_p * (self.w_max - self.weight) * torch.exp(-dt/self.tau_p)
         dw.masked_fill_(~active, 0)
-        self.weight += dw
+        self.weight += RRAM_device_variation(self.variation, dw)
+        self._clamp()
 
     def plot_weight_map(self, pause_interval):
         """
@@ -129,3 +137,4 @@ class Connection:
         self.config.synapse.tau_m = self.tau_m
         self.config.synapse.w_min = self.w_min
         self.config.synapse.w_max = self.w_max
+        self.config.synapse.variation = self.variation
