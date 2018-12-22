@@ -193,7 +193,7 @@ class LIFLayer(Layer):
         active = (self._spike_history >= self.refractory)
 
         # integrate (on active neurons)
-        self.v += torch.where(active, self.res / self.tau * self.i, torch.zeros_like(self.i))   # coef = 1/C
+        self.v += torch.where(active, self.res * self.i, torch.zeros_like(self.i))   # coef = 1/C
 
         # lateral inhibition
         if self.inhibition:
@@ -227,6 +227,8 @@ class LIFLayer(Layer):
             # indices = indices[:round(self.winners * overshoot_mask.sum().item() / self.size)]
 
             if len(indices) > 0:
+                # print('v:', self.v)
+                # print('v_th:', self.v_th)
                 mask = torch.ones_like(self.firing_mask)
                 mask.scatter_(0, indices, 0)
                 self.v.masked_fill_(mask, self.v_rest)
@@ -256,18 +258,18 @@ class LIFLayer(Layer):
         """
         if self.adaptive:
             # increase the threshold of the most recent active neuron, according to self.spike_counts
-            _, indices = torch.sort(self.spike_counts, descending=True)
+            spiking_rank, indices = torch.sort(self.spike_counts, descending=True)
 
-            idx = indices[:self.winners]
+            idx = indices.masked_select(spiking_rank > 0)[:self.winners]
 
             mask = torch.zeros_like(self.firing_mask)
-            mask.scatter_(0, idx, 1)
-
-            d = -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners
-            d.masked_fill_(mask, self.dv_th)
+            d = -self.config.lif_layer.dv_th_m * torch.ones_like(self.v)
+            if len(idx) > 0:
+                mask.scatter_(0, idx, 1)
+                d.masked_fill_(mask, self.dv_th)
 
             self.v_th += d
-            # self.v_th.clamp_(min=self.v_th_rest)
+            self.v_th.clamp_(min=0.)
 
     def update_cfg(self):
         super(LIFLayer, self).update_cfg()

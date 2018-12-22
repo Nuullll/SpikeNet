@@ -78,6 +78,9 @@ class Connection:
         dt = self._last_pre_spike_time.repeat(self.post_layer.size, 1).t() - \
             self._last_post_spike_time.repeat(self.pre_layer.size, 1)
 
+        # discard long delay post-pre spike pairs
+        # active.masked_fill_(dt >= 4, 0)
+
         # weights decrease, because pre-spikes come after post-spikes
         dw = self.learn_rate_m * (self.weight - self.w_min) * torch.exp(-dt/self.tau_m)
         dw.masked_fill_(~active, 0)
@@ -102,6 +105,9 @@ class Connection:
         dt = self._last_post_spike_time.repeat(self.pre_layer.size, 1) - \
             self._last_pre_spike_time.repeat(self.post_layer.size, 1).t()
 
+        # discard long delay post-pre spike pairs
+        # active.masked_fill_(dt >= 4, 0)
+
         # weights increase, because post-spikes come after pre-spikes
         dw = self.learn_rate_p * (self.w_max - self.weight) * torch.exp(-dt/self.tau_p)
         dw.masked_fill_(~active, 0)
@@ -122,7 +128,7 @@ class Connection:
         w_max = self.config.synapse.w_max
 
         # plot
-        plt.figure()
+        # plt.figure()
         for i in range(output_num):
             plt.subplot(row_num, col_num, i + 1)
             plt.matshow(self.weight[:, i].view(width, height), fignum=False, vmin=w_min, vmax=w_max)

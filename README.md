@@ -10,6 +10,10 @@ SNN simulation framework.
 # Notes
 * Load network configurations from .ini files
 
+# pytorch-refactor TODO
+
+- [ ] Inherit `torch.utils.data.Dataset`.
+
 # TODO
 
 - [x] SVM probability output.

@@ -16,7 +16,9 @@ import logging
 import collections
 import json_tricks as json
 import matplotlib.pyplot as plt
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
+
+import random
 
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results/')
@@ -98,11 +100,17 @@ def train(training_images, training_labels, cfg, overwrite_check=True):
 
         # run simulation
         network.run(cfg.input.duration_per_training_image)
+        spike_counts = network.layers['O'].spike_counts
+        spike_counts, indices = torch.sort(spike_counts, descending=True)
+        logging.info('Winners: %s, Spikes: %s' % (indices[:config.lif_layer.winners], spike_counts[:config.lif_layer.winners]))
         network.after_batch()
 
         dw = network.connections[('I', 'O')].weight - w_before
         i = torch.argmax(torch.abs(dw))
         logging.info('Max weight change = %.2e' % dw.view(-1)[i])
+
+        if random.random() < 0.1:
+            network.plot_weight_map(('I', 'O'), 1)
 
     # save final weight
     weight_file = os.path.join(folder, 'final_weight.pt')
@@ -133,11 +141,11 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
     network.inference_mode()
 
     # show weight map
-    # network.plot_weight_map(('I', 'O'), 3)
+    network.plot_weight_map(('I', 'O'), 3)
 
     # adjust configs for testing process
     network.layers['O'].v_th *= 1
-    network.layers['O'].winners = 4
+    network.layers['O'].winners = 3
     network.export_cfg().save(os.path.join(result_folder, 'testing.ini'))
 
     # inference
@@ -263,7 +271,7 @@ def analyse_variation(trial_count):
 
 
 def visualize_variation(trial_count):
-    with open(os.path.join(RESULTS_DIR, 'variation-results.json'), 'r') as f:
+    with open(os.path.join(RESULTS_DIR, 'min-init-variation-results.json'), 'r') as f:
         results = json.load(f)
         print(results)
 
@@ -293,4 +301,13 @@ def visualize_variation(trial_count):
 
 
 if __name__ == '__main__':
-    analyse_variation(10)
+    config = load_config()
+
+    results = []
+
+    for i in range(10):
+        print('Trial #%d' % i)
+        training_result, testing_result = one_trial(config, i, overwrite_check=False)
+        results.append((training_result, testing_result))
+
+    print(results)
