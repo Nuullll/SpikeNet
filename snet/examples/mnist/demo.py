@@ -16,7 +16,7 @@ import logging
 import collections
 import json_tricks as json
 import matplotlib.pyplot as plt
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results/')
@@ -98,11 +98,17 @@ def train(training_images, training_labels, cfg, overwrite_check=True):
 
         # run simulation
         network.run(cfg.input.duration_per_training_image)
+        logging.info(network.layers['O'].spike_counts)
         network.after_batch()
 
-        dw = network.connections[('I', 'O')].weight - w_before
+        w = network.connections[('I', 'O')].weight
+        dw = w - w_before
         i = torch.argmax(torch.abs(dw))
         logging.info('Max weight change = %.2e' % dw.view(-1)[i])
+        logging.info('Max = %f, min = %f' % (w.max(), w.min()))
+
+        if idx % 100 == 0:
+            network.plot_weight_map(('I', 'O'), 0.01)
 
     # save final weight
     weight_file = os.path.join(folder, 'final_weight.pt')
@@ -293,4 +299,4 @@ def visualize_variation(trial_count):
 
 
 if __name__ == '__main__':
-    analyse_variation(10)
+    one_trial(load_config(), 0, False)

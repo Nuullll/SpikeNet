@@ -63,7 +63,7 @@ class Connection:
             return
 
         # decay first
-        dw = self.decay * (self.weight - self.w_min)
+        dw = self.decay * (self.w_max - self.w_min)
         self.weight -= RRAM_device_variation(self.variation, dw)
         self._clamp()
 
@@ -122,7 +122,7 @@ class Connection:
         w_max = self.config.synapse.w_max
 
         # plot
-        plt.figure()
+        # plt.figure()
         for i in range(output_num):
             plt.subplot(row_num, col_num, i + 1)
             plt.matshow(self.weight[:, i].view(width, height), fignum=False, vmin=w_min, vmax=w_max)
