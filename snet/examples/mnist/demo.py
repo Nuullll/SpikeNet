@@ -87,6 +87,9 @@ def train(training_images, training_labels, cfg, overwrite_check=True):
     network = snet.NetworkLoader().from_cfg(config=cfg)
     network.training_mode()
 
+    # log v_th
+    v_th_mean = torch.zeros_like(network.layers['O'].v_th)
+
     for idx, image in enumerate(training_images):
         logging.info(f"Training: image #{idx}, label {training_labels[idx]}")
 
@@ -110,9 +113,16 @@ def train(training_images, training_labels, cfg, overwrite_check=True):
         if idx % 100 == 0:
             network.plot_weight_map(('I', 'O'), 0.01)
 
+        v_th_mean += network.layers['O'].v_th
+        logging.info("Mean threshold: %s" % (v_th_mean / (idx + 1)).tolist())
+
     # save final weight
     weight_file = os.path.join(folder, 'final_weight.pt')
     torch.save(network.connections[('I', 'O')].weight, weight_file)
+
+    # save thresholds
+    thresholds_file = os.path.join(folder, 'v_th.pt')
+    torch.save(v_th_mean / len(training_images), thresholds_file)
 
     # save training config
     cfg.save(os.path.join(folder, 'training.ini'))
@@ -130,6 +140,7 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
 
     # load final weight after training
     w = torch.load(os.path.join(result_folder, 'final_weight.pt'))
+    v_th = torch.load(os.path.join(result_folder, 'v_th.pt'))
 
     # load config
     cfg = LocalConfig(os.path.join(result_folder, 'training.ini'))
@@ -142,8 +153,9 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
     # network.plot_weight_map(('I', 'O'), 3)
 
     # adjust configs for testing process
-    network.layers['O'].v_th *= 1
-    network.layers['O'].winners = 4
+    network.layers['O'].v_th = v_th
+    network.layers['O'].winners = 3
+    network.layers['O'].tau *= 1
     network.export_cfg().save(os.path.join(result_folder, 'testing.ini'))
 
     # inference
