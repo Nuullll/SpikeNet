@@ -154,8 +154,7 @@ def evaluate(training_images, training_labels, testing_images, testing_labels, r
 
     # adjust configs for testing process
     network.layers['O'].v_th = v_th
-    network.layers['O'].winners = 3
-    network.layers['O'].tau *= 1
+    # network.layers['O'].winners = 3
     network.export_cfg().save(os.path.join(result_folder, 'testing.ini'))
 
     # inference
