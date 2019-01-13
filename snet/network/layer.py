@@ -7,6 +7,7 @@
 
 
 import torch
+import random
 
 
 class Layer(object):
@@ -92,24 +93,23 @@ class PoissonLayer(Layer):
     """
     Layer of Poisson neurons.
     """
-    def __init__(self, firing_step, config):
-        """
-        :param firing_step:         <torch.IntTensor>       Specify firing step of each neuron.
-        """
-        self.firing_step = firing_step
+    def __init__(self, config):
+        super(PoissonLayer, self).__init__(state=torch.zeros(config.network.input_neuron_number), config=config)
+        self.image = None
 
-        state = firing_step.float() * torch.rand_like(firing_step.float())
-        super(PoissonLayer, self).__init__(state=state.long(), config=config)
+        self.pattern_firing_rate = self.config.input.pattern_firing_rate
+        self.background_firing_rate = self.config.input.background_firing_rate
+        self.dt = self.config.network.dt_s
 
     def process(self):
-        """
-        Generates a spike every `firing_step` calls.
-        """
         self._preprocess()
 
-        self.state += 1
+        x = torch.rand_like(self.image, dtype=torch.float)
+        ref = self.pattern_firing_rate * self.dt * self.image.float() * 100 / self.image.float().sum()
+        # ref.masked_fill_(self.image == 0, self.background_firing_rate * self.dt)
+
         # fire spikes
-        self.firing_mask = (self.state >= self.firing_step)
+        self.firing_mask = (x <= ref)
         self._fire_and_reset()
 
     def _reset(self):
@@ -117,14 +117,6 @@ class PoissonLayer(Layer):
         Resets `state` to `0`.
         """
         self.state.masked_fill_(self.firing_mask, 0)
-
-    def set_step(self, firing_step):
-        """
-        Sets new firing steps. Resets `self.state`.
-        :param firing_step:     <torch.IntTensor>
-        """
-        self.firing_step = firing_step
-        self.state = (firing_step.float() * torch.rand_like(firing_step.float())).long()
 
     def update_cfg(self):
         super(PoissonLayer, self).update_cfg()
@@ -148,6 +140,7 @@ class LIFLayer(Layer):
         self.tau = self.config.lif_layer.tau
         self.res = self.config.lif_layer.res
         self.winners = self.config.lif_layer.winners
+        self.inputs = self.config.network.input_neuron_number
 
         # the membrane potential serves as the internal state
         super(LIFLayer, self).__init__(state=torch.ones(size) * self.v_rest, config=config)
@@ -193,7 +186,7 @@ class LIFLayer(Layer):
         active = (self._spike_history >= self.refractory)
 
         # integrate (on active neurons)
-        self.v += torch.where(active, self.res / self.tau * self.i, torch.zeros_like(self.i))   # coef = 1/C
+        self.v += torch.where(active, self.res * self.i / self.inputs, torch.zeros_like(self.i))   # coef = 1/C
 
         # lateral inhibition
         if self.inhibition:
@@ -237,7 +230,9 @@ class LIFLayer(Layer):
         # if self.adaptive:
         #     # thresholds integrate (on firing neurons)
         #     # self.v_th = torch.where(self.firing_mask, self.v_th + self.dv_th, self.v_th)
-        #     self.v_th = torch.where(self.firing_mask, self.v, self.v_th)
+        #     th_decay = 0.00005
+        #     self.v_th = torch.where(self.firing_mask, self.v_th + self.dv_th,
+        #                             self.v_th - th_decay * (self.v_th - self.v_th_rest))
 
         # fire and reset
         self._fire_and_reset()
@@ -256,15 +251,18 @@ class LIFLayer(Layer):
         """
         if self.adaptive:
             # increase the threshold of the most recent active neuron, according to self.spike_counts
-            _, indices = torch.sort(self.spike_counts, descending=True)
+            # _, indices = torch.sort(self.spike_counts, descending=True)
+            #
+            # count = (self.spike_counts > 0).sum().item()
+            #
+            # idx = indices[:min(count, self.winners)]
+            #
+            # mask = torch.zeros_like(self.firing_mask)
 
-            idx = indices[:self.winners]
-
-            mask = torch.zeros_like(self.firing_mask)
-            mask.scatter_(0, idx, 1)
-
-            d = -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners
-            d.masked_fill_(mask, self.dv_th)
+            # if len(idx) > 0:
+            #     mask.scatter_(0, idx, 1)
+            d = torch.where(self.spike_counts > 0, self.spike_counts.float() * self.dv_th,
+                            -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners)
 
             self.v_th += d
             # self.v_th.clamp_(min=self.v_th_rest)

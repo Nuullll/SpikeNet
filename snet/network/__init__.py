@@ -40,7 +40,7 @@ class NetworkLoader(object):
         # Specify layers
         # {name: <Layer>}
         layers = {
-            'I': PoissonLayer(firing_step=torch.zeros(sizes['I']), config=config),
+            'I': PoissonLayer(config=config),
             'O': LIFLayer(sizes['O'], config=config)
         }
 
@@ -67,7 +67,7 @@ class NetworkLoader(object):
         # {name: [state_vars]}
         monitors = {
             # 'I': ['o'],
-            # 'O': ['o']
+            'O': ['v']
         }
 
         # Config network
@@ -172,6 +172,8 @@ class Network:
         self.input_firing_rate = self.config.input.average_firing_rate
         self.input_neuron_number = self.config.network.input_neuron_number
 
+        self.image = None
+
     def run(self, time):
         """
         Run simulation for given `time`.
@@ -196,6 +198,16 @@ class Network:
 
             # STDP updates according to incoming new post-spikes
             self._update_on_post_spikes(self.time + t)
+
+            if (self.time + t) % 100000 == 0:
+                plt.figure(1)
+                plt.clf()
+                self.plot_weight_map(('I', 'O'), 0.01)
+                plt.figure(2)
+                plt.clf()
+                plt.plot(self.monitors['O'].record['v'].numpy())
+                plt.pause(0.01)
+            print(self.time + t)
 
         self.time += time
 
@@ -272,18 +284,12 @@ class Network:
         """
         self.connections[connection_name].plot_weight_map(pause_interval)
 
-    def poisson_encoding(self, image):
-        """
-        Encodes a single image in Poisson fashion.
-        :param image:           <torch.tensor>
-        :return: firing_step    <torch.tensor>
-        """
-        image.clamp_(min=1)
-        firing_rate = image.float() * self.input_firing_rate * self.input_neuron_number / image.float().sum()
+    def input_image(self, image):
+        self.layers['I'].image = image.view(-1)
 
-        firing_step = torch.div(1 / self.dt_s * torch.ones_like(firing_rate), firing_rate)
-
-        return firing_step.long()
+        # reset membrane potential
+        output = self.layers['O']
+        output.v = torch.ones_like(output.v) * output.v_rest
 
     def export_cfg(self):
         """

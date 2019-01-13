@@ -24,6 +24,8 @@ class Monitor:
         self.state_vars = state_vars
         self.record = {state: torch.tensor([]) for state in state_vars}
 
+        self.max_entry = 10000
+
     def update(self):
         """
         Gets `state` values from `target` <Layer>.
@@ -31,3 +33,6 @@ class Monitor:
         """
         for state, history in self.record.items():
             self.record[state] = torch.cat((history, getattr(self.target, state).unsqueeze(0)), 0)
+
+            if len(self.record[state]) > self.max_entry:
+                self.record[state] = self.record[state][-self.max_entry:]

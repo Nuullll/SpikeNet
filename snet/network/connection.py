@@ -62,11 +62,6 @@ class Connection:
         if self.static:
             return
 
-        # decay first
-        dw = self.decay * (self.weight - self.w_min)
-        self.weight -= RRAM_device_variation(self.variation, dw)
-        self._clamp()
-
         # record new pre-spikes
         self._last_pre_spike_time.masked_fill_(self.pre_layer.firing_mask, time)
 
@@ -77,6 +72,9 @@ class Connection:
         # calculate timing difference (where new pre-spikes timing is now)
         dt = self._last_pre_spike_time.repeat(self.post_layer.size, 1).t() - \
             self._last_post_spike_time.repeat(self.pre_layer.size, 1)
+
+        window_mask = (dt <= 1 * self.tau_p)
+        active &= window_mask
 
         # weights decrease, because pre-spikes come after post-spikes
         dw = self.learn_rate_m * (self.weight - self.w_min) * torch.exp(-dt/self.tau_m)
@@ -102,6 +100,17 @@ class Connection:
         dt = self._last_post_spike_time.repeat(self.pre_layer.size, 1) - \
             self._last_pre_spike_time.repeat(self.post_layer.size, 1).t()
 
+        window_mask = (dt <= 1 * self.tau_m)
+        active &= window_mask
+
+        # decay on post-spikes
+        decay_mask = torch.ger(torch.ones_like(pre_active), self.post_layer.firing_mask)
+        decay_mask &= ~window_mask
+        dw = self.decay * (self.weight - self.w_min)
+        dw.masked_fill_(~decay_mask, 0)
+        self.weight -= RRAM_device_variation(self.variation, dw)
+        self._clamp()
+
         # weights increase, because post-spikes come after pre-spikes
         dw = self.learn_rate_p * (self.w_max - self.weight) * torch.exp(-dt/self.tau_p)
         dw.masked_fill_(~active, 0)
@@ -122,7 +131,7 @@ class Connection:
         w_max = self.config.synapse.w_max
 
         # plot
-        plt.figure()
+        # plt.figure()
         for i in range(output_num):
             plt.subplot(row_num, col_num, i + 1)
             plt.matshow(self.weight[:, i].view(width, height), fignum=False, vmin=w_min, vmax=w_max)
