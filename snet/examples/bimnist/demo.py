@@ -71,7 +71,7 @@ def train(training_dataset, cfg, overwrite_check=True):
     network.training_mode()
 
     for image, label in training_dataset:
-        if label not in [0, 1, 2]:
+        if label not in [0, 1]:
             continue
         # input image
         network.input_image(image)
@@ -81,9 +81,17 @@ def train(training_dataset, cfg, overwrite_check=True):
         # plt.plot(network.monitors['O'].record['v'].numpy())
         # plt.show()
         print(label)
-        print(network.layers['O'].spike_counts)
+        counts = network.layers['O'].spike_counts.clone()
+        print(counts)
         print(network.layers['O'].v_th)
         network.after_batch()
+
+        while counts.sum() < 1:
+            network.run(cfg.input.duration_per_training_image)
+            counts += network.layers['O'].spike_counts.clone()
+            print(counts)
+            print(network.layers['O'].v_th)
+            network.after_batch()
 
     # # save final weight
     # weight_file = os.path.join(folder, 'final_weight.pt')

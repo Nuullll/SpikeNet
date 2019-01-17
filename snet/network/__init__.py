@@ -188,7 +188,7 @@ class Network:
             self._update_monitors()
 
             # STDP updates according to incoming new pre-spikes
-            self._update_on_pre_spikes(self.time + t)
+            self._update_on_pre_spikes(self.time)
 
             # Feed forward
             self._feed_forward()
@@ -197,9 +197,11 @@ class Network:
             self._process()
 
             # STDP updates according to incoming new post-spikes
-            self._update_on_post_spikes(self.time + t)
+            self._update_on_post_spikes(self.time)
 
-            if (self.time + t) % 100000 == 0:
+            self.time += 1
+
+            if self.time % 1000 == 0:
                 plt.figure(1)
                 plt.clf()
                 self.plot_weight_map(('I', 'O'), 0.01)
@@ -207,17 +209,18 @@ class Network:
                 plt.clf()
                 plt.plot(self.monitors['O'].record['v'].numpy())
                 plt.pause(0.01)
-            print(self.time + t)
 
-        self.time += time
+            if self.layers['O'].spike_counts.sum() >= 1:
+                return
 
-    def after_batch(self):
+    def after_batch(self, keep_count=False):
         """
         Updates network after one batch, e.g. adapts thresholds.
         """
         for lyr in self.layers.values():
             lyr.adapt_thresholds()
-            lyr.clear_spike_counts()
+            if not keep_count:
+                lyr.clear_spike_counts()
 
     def _update_monitors(self):
         """

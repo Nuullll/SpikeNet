@@ -105,7 +105,7 @@ class PoissonLayer(Layer):
         self._preprocess()
 
         x = torch.rand_like(self.image, dtype=torch.float)
-        ref = self.pattern_firing_rate * self.dt * self.image.float() * 100 / self.image.float().sum()
+        ref = self.pattern_firing_rate * self.image.float() / self.image.float().sum()
         # ref.masked_fill_(self.image == 0, self.background_firing_rate * self.dt)
 
         # fire spikes
@@ -261,7 +261,7 @@ class LIFLayer(Layer):
 
             # if len(idx) > 0:
             #     mask.scatter_(0, idx, 1)
-            d = torch.where(self.spike_counts > 0, self.spike_counts.float() * self.dv_th,
+            d = torch.where(self.spike_counts > 0, torch.ones_like(self.v) * self.dv_th,
                             -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners)
 
             self.v_th += d
