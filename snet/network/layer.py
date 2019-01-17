@@ -29,6 +29,9 @@ class Layer(object):
         # spike counter
         self.spike_counts = torch.zeros_like(state, dtype=torch.long)
 
+        # activity tracker
+        self.activity_history = torch.tensor([])
+
         # adaptive thresholds
         self.adaptive = False
 
@@ -40,6 +43,10 @@ class Layer(object):
         # for performance
         self.o_rest = self.config.layer_basics.o_rest
         self.o_peak = self.config.layer_basics.o_peak
+
+        self.track_phase = self.config.lif_layer.track_phase
+
+        self.time = 0
 
     def process(self):
         """
@@ -74,6 +81,15 @@ class Layer(object):
         """
         self._fire()
         self._reset()
+
+    def track_activity(self):
+        """
+        Track neurons' recent activity.
+        """
+        self.activity_history = torch.cat((self.activity_history, self.spike_counts.float().unsqueeze(0)), 0)
+
+        if len(self.activity_history) > self.track_phase:
+            self.activity_history = self.activity_history[-self.track_phase:]
 
     def adapt_thresholds(self):
         pass
@@ -141,6 +157,10 @@ class LIFLayer(Layer):
         self.res = self.config.lif_layer.res
         self.winners = self.config.lif_layer.winners
         self.inputs = self.config.network.input_neuron_number
+
+        self.firing_event_target = self.config.lif_layer.firing_event_target
+        self.activated_phase_target = self.config.lif_layer.activated_phase_target
+        self.duration_per_training_image = self.config.input.duration_per_training_image
 
         # the membrane potential serves as the internal state
         super(LIFLayer, self).__init__(state=torch.ones(size) * self.v_rest, config=config)
@@ -237,11 +257,28 @@ class LIFLayer(Layer):
         # fire and reset
         self._fire_and_reset()
 
+        self.time += 1
+
     def _reset(self):
         """
         Resets fired neurons' potentials to `self.v_rest`.
         Starts refractory process.
         """
+        # adapt thresholds after firing
+        if self.adaptive:
+            if self.firing_mask.any():
+                activated_phase = self.firing_mask.float()
+                total_firing_events = self.duration_per_training_image / (self.time + 1) * self.spike_counts.float()
+
+                if len(self.activity_history) > 0:
+                    activated_phase += (self.activity_history > 0).sum(0).float()
+                    total_firing_events += self.activity_history.sum(0).float()
+
+                factor = total_firing_events / activated_phase / self.firing_event_target
+                factor[torch.isnan(factor)] = 1
+                factor[torch.isinf(factor)] = 1
+                self.v_th *= factor
+
         self.v.masked_fill_(self.firing_mask, self.v_rest)
         self._spike_history.masked_fill_(self.firing_mask, 0)
 
@@ -250,22 +287,12 @@ class LIFLayer(Layer):
         Adapts thresholds.
         """
         if self.adaptive:
-            # increase the threshold of the most recent active neuron, according to self.spike_counts
-            # _, indices = torch.sort(self.spike_counts, descending=True)
-            #
-            # count = (self.spike_counts > 0).sum().item()
-            #
-            # idx = indices[:min(count, self.winners)]
-            #
-            # mask = torch.zeros_like(self.firing_mask)
+            if len(self.activity_history) > 0:
+                activated_phase = (self.activity_history > 0).sum(0).float()
 
-            # if len(idx) > 0:
-            #     mask.scatter_(0, idx, 1)
-            d = torch.where(self.spike_counts > 0, torch.ones_like(self.v) * self.dv_th,
-                            -self.dv_th * torch.ones_like(self.v) / (self.size - self.winners) * self.winners)
-
-            self.v_th += d
-            # self.v_th.clamp_(min=self.v_th_rest)
+                factor = activated_phase / len(self.activity_history) / self.activated_phase_target * self.track_phase
+                factor[torch.isnan(factor)] = 1
+                self.v_th *= factor
 
     def update_cfg(self):
         super(LIFLayer, self).update_cfg()

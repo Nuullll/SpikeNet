@@ -88,6 +88,7 @@ class NetworkLoader(object):
         config.synapse.learn_rate_p_eff = config.synapse.learn_rate_p * config.synapse.learn_rate_p_scaling
         config.synapse.learn_rate_m_eff = config.synapse.learn_rate_m * config.synapse.learn_rate_m_scaling
         config.synapse.decay_eff = config.synapse.decay * config.synapse.decay_scaling
+        config.lif_layer.activated_phase_target = config.lif_layer.track_phase / config.network.output_neuron_number
 
         return config
 
@@ -210,17 +211,17 @@ class Network:
                 plt.plot(self.monitors['O'].record['v'].numpy())
                 plt.pause(0.01)
 
-            if self.layers['O'].spike_counts.sum() >= 1:
-                return
-
     def after_batch(self, keep_count=False):
         """
         Updates network after one batch, e.g. adapts thresholds.
         """
         for lyr in self.layers.values():
+            lyr.track_activity()
             lyr.adapt_thresholds()
             if not keep_count:
                 lyr.clear_spike_counts()
+
+            lyr.time = 0
 
     def _update_monitors(self):
         """

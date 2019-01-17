@@ -86,13 +86,6 @@ def train(training_dataset, cfg, overwrite_check=True):
         print(network.layers['O'].v_th)
         network.after_batch()
 
-        while counts.sum() < 1:
-            network.run(cfg.input.duration_per_training_image)
-            counts += network.layers['O'].spike_counts.clone()
-            print(counts)
-            print(network.layers['O'].v_th)
-            network.after_batch()
-
     # # save final weight
     # weight_file = os.path.join(folder, 'final_weight.pt')
     torch.save(network.connections[('I', 'O')].weight, 'final_weight.pt')
