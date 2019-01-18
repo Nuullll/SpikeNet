@@ -264,20 +264,9 @@ class LIFLayer(Layer):
         Resets fired neurons' potentials to `self.v_rest`.
         Starts refractory process.
         """
-        # adapt thresholds after firing
+        # # adapt thresholds after firing
         if self.adaptive:
-            if self.firing_mask.any():
-                activated_phase = self.firing_mask.float()
-                total_firing_events = self.duration_per_training_image / (self.time + 1) * self.spike_counts.float()
-
-                if len(self.activity_history) > 0:
-                    activated_phase += (self.activity_history > 0).sum(0).float()
-                    total_firing_events += self.activity_history.sum(0).float()
-
-                factor = total_firing_events / activated_phase / self.firing_event_target
-                factor[torch.isnan(factor)] = 1
-                factor[torch.isinf(factor)] = 1
-                self.v_th *= factor
+            self.v_th += self.dv_th * self.firing_mask.float()
 
         self.v.masked_fill_(self.firing_mask, self.v_rest)
         self._spike_history.masked_fill_(self.firing_mask, 0)
@@ -288,11 +277,26 @@ class LIFLayer(Layer):
         """
         if self.adaptive:
             if len(self.activity_history) > 0:
-                activated_phase = (self.activity_history > 0).sum(0).float()
+                last_activity = self.activity_history[-1].float()
 
-                factor = activated_phase / len(self.activity_history) / self.activated_phase_target * self.track_phase
+                total_firing_events = self.activity_history.sum(0).float()
+
+                factor = total_firing_events / len(self.activity_history) / (
+                        self.firing_event_target / self.size)
                 factor[torch.isnan(factor)] = 1
+                factor.clamp_(min=0.5)
+
+                # slow down
+                factor = torch.ones_like(factor) + (factor - torch.ones_like(factor)) / 100
+
+                # if last_activity.sum() > 0:
+                #     factor.masked_fill_(last_activity == 0, 1)
+                #     factor *= torch.where(last_activity > 0, last_activity / self.firing_event_target,
+                #                           torch.ones_like(last_activity))
+
                 self.v_th *= factor
+
+                self.v_th.clamp_(min=2.0, max=20.0)
 
     def update_cfg(self):
         super(LIFLayer, self).update_cfg()

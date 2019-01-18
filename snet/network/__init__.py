@@ -202,14 +202,14 @@ class Network:
 
             self.time += 1
 
-            if self.time % 1000 == 0:
+            if self.time % 3000 == 0:
                 plt.figure(1)
                 plt.clf()
                 self.plot_weight_map(('I', 'O'), 0.01)
-                plt.figure(2)
-                plt.clf()
-                plt.plot(self.monitors['O'].record['v'].numpy())
-                plt.pause(0.01)
+                # plt.figure(2)
+                # plt.clf()
+                # plt.plot(self.monitors['O'].record['v'].numpy())
+                # plt.pause(0.01)
 
     def after_batch(self, keep_count=False):
         """

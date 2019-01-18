@@ -70,6 +70,9 @@ def train(training_dataset, cfg, overwrite_check=True):
     network = snet.NetworkLoader().from_cfg(config=cfg)
     network.training_mode()
 
+    v_th_tracker = torch.tensor([])
+    tracker_limit = 1000
+
     for image, label in training_dataset:
         if label not in [0, 1]:
             continue
@@ -85,6 +88,15 @@ def train(training_dataset, cfg, overwrite_check=True):
         print(counts)
         print(network.layers['O'].v_th)
         network.after_batch()
+
+        v_th_tracker = torch.cat((v_th_tracker, network.layers['O'].v_th.unsqueeze(0)), 0)
+        if len(v_th_tracker) > tracker_limit:
+            v_th_tracker = v_th_tracker[-tracker_limit:]
+
+        plt.figure(3)
+        plt.clf()
+        plt.plot(v_th_tracker.numpy())
+        plt.pause(0.01)
 
     # # save final weight
     # weight_file = os.path.join(folder, 'final_weight.pt')
