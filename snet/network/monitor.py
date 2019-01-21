@@ -24,7 +24,7 @@ class Monitor:
         self.state_vars = state_vars
         self.record = {state: torch.tensor([]) for state in state_vars}
 
-        self.max_entry = 10000
+        self.max_entry = 3000
 
     def update(self):
         """

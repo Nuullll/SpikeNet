@@ -88,8 +88,8 @@ class Layer(object):
         """
         self.activity_history = torch.cat((self.activity_history, self.spike_counts.float().unsqueeze(0)), 0)
 
-        if len(self.activity_history) > self.track_phase:
-            self.activity_history = self.activity_history[-self.track_phase:]
+        # if len(self.activity_history) > self.track_phase:
+        #     self.activity_history = self.activity_history[-self.track_phase:]
 
     def adapt_thresholds(self):
         pass
@@ -112,6 +112,7 @@ class PoissonLayer(Layer):
     def __init__(self, config):
         super(PoissonLayer, self).__init__(state=torch.zeros(config.network.input_neuron_number), config=config)
         self.image = None
+        self.image_norm = None
 
         self.pattern_firing_rate = self.config.input.pattern_firing_rate
         self.background_firing_rate = self.config.input.background_firing_rate
@@ -120,11 +121,14 @@ class PoissonLayer(Layer):
     def process(self):
         self._preprocess()
 
-        x = torch.rand_like(self.image, dtype=torch.float)
-        ref = self.pattern_firing_rate * self.image.float() / self.image.float().sum()
+        # x = torch.rand_like(self.image, dtype=torch.float)
+        # rand_mask = x < 0.001
+        # self.image.masked_fill_(rand_mask, 0)
+        ref = self.image / self.image_norm
         # ref.masked_fill_(self.image == 0, self.background_firing_rate * self.dt)
 
         # fire spikes
+        x = torch.rand_like(self.image, dtype=torch.float)
         self.firing_mask = (x <= ref)
         self._fire_and_reset()
 
@@ -151,7 +155,8 @@ class LIFLayer(Layer):
         # for performance
         self.v_rest = self.config.lif_layer.v_rest
         self.v_th_rest = self.config.lif_layer.v_th_rest
-        self.dv_th = self.config.lif_layer.dv_th
+        self.dv_th_p = self.config.lif_layer.dv_th_p
+        self.dv_th_m = self.config.lif_layer.dv_th_m
         self.refractory = self.config.lif_layer.refractory
         self.tau = self.config.lif_layer.tau
         self.res = self.config.lif_layer.res
@@ -199,7 +204,7 @@ class LIFLayer(Layer):
         self._preprocess()
 
         # leak
-        self.v -= (self.v - self.v_rest) / self.tau
+        # self.v -= (self.v - self.v_rest) / self.tau
 
         # during refractory period?
         self._spike_history += 1
@@ -265,8 +270,8 @@ class LIFLayer(Layer):
         Starts refractory process.
         """
         # # adapt thresholds after firing
-        if self.adaptive:
-            self.v_th += self.dv_th * self.firing_mask.float()
+        # if self.adaptive:
+        #     self.v_th += self.firing_mask.float() * self.dv_th_p
 
         self.v.masked_fill_(self.firing_mask, self.v_rest)
         self._spike_history.masked_fill_(self.firing_mask, 0)
@@ -277,26 +282,11 @@ class LIFLayer(Layer):
         """
         if self.adaptive:
             if len(self.activity_history) > 0:
-                last_activity = self.activity_history[-1].float()
+                activity_history = self.activity_history[-self.track_phase:].float()
+                a = activity_history.sum(0) / (len(activity_history) * self.duration_per_training_image)
+                t = self.firing_event_target / (self.size * self.duration_per_training_image)
 
-                total_firing_events = self.activity_history.sum(0).float()
-
-                factor = total_firing_events / len(self.activity_history) / (
-                        self.firing_event_target / self.size)
-                factor[torch.isnan(factor)] = 1
-                factor.clamp_(min=0.5)
-
-                # slow down
-                factor = torch.ones_like(factor) + (factor - torch.ones_like(factor)) / 100
-
-                # if last_activity.sum() > 0:
-                #     factor.masked_fill_(last_activity == 0, 1)
-                #     factor *= torch.where(last_activity > 0, last_activity / self.firing_event_target,
-                #                           torch.ones_like(last_activity))
-
-                self.v_th *= factor
-
-                self.v_th.clamp_(min=2.0, max=20.0)
+                self.v_th += 0.5 * (a - t)
 
     def update_cfg(self):
         super(LIFLayer, self).update_cfg()

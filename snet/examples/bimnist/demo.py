@@ -26,6 +26,7 @@ if not os.path.exists(RESULTS_DIR):
 def load_bimnist(train=True):
 
     dataset = MNIST(DATASET_DIR, train=train, download=True, transform=transforms.Compose([
+        # transforms.Resize((11, 11)),
         transforms.ToTensor(),
         # transforms.Lambda(lambda x: (x > 0.5).squeeze(0))
     ]))
@@ -46,21 +47,20 @@ def cfg_abstract(cfg, prefix='', suffix=''):
     if not suffix == '':
         suffix = '.' + suffix
 
-    return f"{prefix}{cfg.network.output_neuron_number}out." \
-           f"{cfg.lif_layer.winners}winners." \
+    return f"{prefix}{cfg.input.start_category}-{cfg.input.end_category}." \
+           f"{cfg.network.output_neuron_number}out." \
            f"{cfg.input.pattern_firing_rate}pattern." \
-           f"{cfg.input.background_firing_rate}background" \
            f"{suffix}"
 
 
 def train(training_dataset, cfg, overwrite_check=True):
-    # folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg))
-    # if not os.path.exists(folder):
-    #     os.makedirs(folder)
-    # else:
-    #     if overwrite_check:
-    #         logging.warning('Result folder %s already exists, press enter to overwrite history result.' % folder)
-    #         input()
+    folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg))
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    else:
+        if overwrite_check:
+            logging.warning('Result folder %s already exists, press enter to overwrite history result.' % folder)
+            input()
     #
     # if notification:
     #     # send message
@@ -70,33 +70,57 @@ def train(training_dataset, cfg, overwrite_check=True):
     network = snet.NetworkLoader().from_cfg(config=cfg)
     network.training_mode()
 
-    v_th_tracker = torch.tensor([])
-    tracker_limit = 1000
+    labels = list(range(cfg.input.start_category, cfg.input.end_category + 1))
 
+    label_history = []
+
+    idx = 0
     for image, label in training_dataset:
-        if label not in [0, 1]:
+        if label not in labels:
             continue
+
+        print('[%d] Label=%d' % (idx, label))
+
         # input image
         network.input_image(image)
 
         # run simulation
-        network.run(cfg.input.duration_per_training_image)
+        if network.run(cfg.input.duration_per_training_image):
+            # noise stimuli
+            noise = torch.rand_like(image)
+            network.layers['I'].image = noise.view(-1)
+            network.run(20)
+        label_history.append(label.item())
+
         # plt.plot(network.monitors['O'].record['v'].numpy())
         # plt.show()
-        print(label)
         counts = network.layers['O'].spike_counts.clone()
+
+        # Extra run
+        # while counts.sum() == 0:
+        #     network.after_batch(keep_count=True)
+        #     network.run(cfg.input.duration_per_training_image)
+        #     label_history.append(label.item())
+        #
+        #     print('@Extra')
+        #     counts = network.layers['O'].spike_counts.clone()
+        #
+        #     break
+
         print(counts)
         print(network.layers['O'].v_th)
+
         network.after_batch()
 
-        v_th_tracker = torch.cat((v_th_tracker, network.layers['O'].v_th.unsqueeze(0)), 0)
-        if len(v_th_tracker) > tracker_limit:
-            v_th_tracker = v_th_tracker[-tracker_limit:]
+        if idx % 100 == 0:
+            plt.figure(4)
+            plt.clf()
+            spike_events = network.layers['O'].activity_history.nonzero()
+            plt.scatter(spike_events.numpy()[:, 0], spike_events.numpy()[:, 1],
+                        c=torch.tensor(label_history)[spike_events[:, 0]].numpy())
+            plt.pause(0.01)
 
-        plt.figure(3)
-        plt.clf()
-        plt.plot(v_th_tracker.numpy())
-        plt.pause(0.01)
+        idx += 1
 
     # # save final weight
     # weight_file = os.path.join(folder, 'final_weight.pt')
@@ -112,7 +136,44 @@ def train(training_dataset, cfg, overwrite_check=True):
     # return folder
 
 
+def play():
+    cfg = load_config()
+    dataset = load_bimnist()
+    network = snet.NetworkLoader().from_cfg(config=cfg)
+    network.inference_mode()
+
+    legends = []
+    ind = []
+    for idx in range(8):
+        i = random.choice(range(10000))
+        ind.append(i)
+        image, label = dataset[i]
+        legends.append(str(label.item()))
+
+        synapse = network.connections[('I', 'O')]
+        synapse.weight[:, idx] = torch.rand_like(image.view(-1)) * synapse.w_max * image.view(-1)
+
+    plt.figure(1)
+    plt.clf()
+    network.plot_weight_map(("I", "O"), 0.03)
+    for i in ind:
+        image, label = dataset[i]
+
+        output = network.layers['O']
+        output.v = torch.ones_like(output.v) * output.v_rest
+        network.input_image(image)
+
+        network.run(1000)
+
+    plt.figure(2)
+    plt.plot(network.monitors['O'].record['v'].numpy())
+    plt.legend(legends)
+    plt.show()
+
+
 if __name__ == '__main__':
     config = load_config()
     ds = load_bimnist()
     train(ds, config)
+
+    # play()

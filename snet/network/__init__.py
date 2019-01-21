@@ -211,6 +211,11 @@ class Network:
                 # plt.plot(self.monitors['O'].record['v'].numpy())
                 # plt.pause(0.01)
 
+            if self.layers['O'].spike_counts.sum() > 0:
+                return True
+
+        return False
+
     def after_batch(self, keep_count=False):
         """
         Updates network after one batch, e.g. adapts thresholds.
@@ -290,6 +295,7 @@ class Network:
 
     def input_image(self, image):
         self.layers['I'].image = image.view(-1)
+        self.layers['I'].image_norm = self.layers['I'].image.sum()
 
         # reset membrane potential
         output = self.layers['O']
