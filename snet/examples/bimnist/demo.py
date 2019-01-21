@@ -87,8 +87,9 @@ def train(training_dataset, cfg, overwrite_check=True):
         # run simulation
         if network.run(cfg.input.duration_per_training_image):
             # noise stimuli
-            noise = torch.rand_like(image)
-            network.layers['I'].image = noise.view(-1)
+            noise = 1 - image.view(-1)
+            network.input_image(noise)
+            network.layers['I'].image_norm /= 10
             network.run(20)
         label_history.append(label.item())
 
@@ -124,8 +125,8 @@ def train(training_dataset, cfg, overwrite_check=True):
 
     # # save final weight
     # weight_file = os.path.join(folder, 'final_weight.pt')
-    torch.save(network.connections[('I', 'O')].weight, 'final_weight.pt')
-    torch.save(network.layers['O'].v_th, 'v_th.pt')
+    torch.save(network.connections[('I', 'O')].weight, os.path.join(folder, 'final_weight.pt'))
+    torch.save(network.layers['O'].v_th, os.path.join(folder, 'v_th.pt'))
     #
     # # save training config
     # cfg.save(os.path.join(folder, 'training.ini'))

@@ -204,7 +204,7 @@ class LIFLayer(Layer):
         self._preprocess()
 
         # leak
-        # self.v -= (self.v - self.v_rest) / self.tau
+        self.v -= (self.v - self.v_rest) / self.tau
 
         # during refractory period?
         self._spike_history += 1
