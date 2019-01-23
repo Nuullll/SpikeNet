@@ -173,7 +173,7 @@ class Network:
         self.input_firing_rate = self.config.input.average_firing_rate
         self.input_neuron_number = self.config.network.input_neuron_number
 
-        self.image = None
+        self.inference = False
 
     def run(self, time):
         """
@@ -202,17 +202,19 @@ class Network:
 
             self.time += 1
 
-            if self.time % 3000 == 0:
-                plt.figure(1)
-                plt.clf()
-                self.plot_weight_map(('I', 'O'), 0.01)
-                # plt.figure(2)
-                # plt.clf()
-                # plt.plot(self.monitors['O'].record['v'].numpy())
-                # plt.pause(0.01)
+            if not self.inference:
+                if self.time % 30000 == 0:
+                    plt.figure(1)
+                    plt.clf()
+                    self.plot_weight_map(('I', 'O'), 0.01)
+                    # plt.figure(2)
+                    # plt.clf()
+                    # plt.plot(self.monitors['O'].record['v'].numpy())
+                    # plt.pause(0.01)
 
-            if self.layers['O'].spike_counts.sum() > 0:
-                return True
+            if not self.inference:
+                if self.layers['O'].spike_counts.sum() > 0:
+                    return True
 
         return False
 
@@ -267,6 +269,8 @@ class Network:
         """
         Turns on training mode.
         """
+        self.inference = False
+
         for lyr in self.layers.values():
             lyr.adaptive = True
             lyr.inhibition = True
@@ -278,6 +282,8 @@ class Network:
         """
         Turns on inference mode.
         """
+        self.inference = True
+
         for lyr in self.layers.values():
             lyr.adaptive = False
             # lyr.inhibition = False
