@@ -55,7 +55,7 @@ def cfg_abstract(cfg, prefix='', suffix=''):
 
 
 def train(training_dataset, cfg, overwrite_check=True):
-    folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg))
+    folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg, suffix='background&greedy'))
     if not os.path.exists(folder):
         os.makedirs(folder)
     else:
@@ -74,13 +74,15 @@ def train(training_dataset, cfg, overwrite_check=True):
     labels = list(range(cfg.input.start_category, cfg.input.end_category + 1))
 
     label_history = []
+    i_history = []
 
     idx = 0
-    for image, label in training_dataset:
+    for i, (image, label) in enumerate(training_dataset):
         if label not in labels:
             continue
 
         print('[%d] Label=%d' % (idx, label))
+        i_history.append(i)
 
         # input image
         network.input_image(image)
@@ -116,12 +118,86 @@ def train(training_dataset, cfg, overwrite_check=True):
         network.after_batch()
 
         if idx % 1000 == 0:
-            plt.figure(4)
-            plt.clf()
-            spike_events = network.layers['O'].activity_history.nonzero()
-            plt.scatter(spike_events.numpy()[:, 0], spike_events.numpy()[:, 1],
-                        c=torch.tensor(label_history)[spike_events[:, 0]].numpy())
-            plt.pause(0.01)
+            # plt.figure(4)
+            # plt.clf()
+            # spike_events = network.layers['O'].activity_history.nonzero()
+            # plt.scatter(spike_events.numpy()[:, 0], spike_events.numpy()[:, 1],
+            #             c=torch.tensor(label_history)[spike_events[:, 0]].numpy())
+            # plt.pause(0.01)
+            if len(i_history) >= 1000:
+
+                network.inference_mode()
+
+                response_map = torch.zeros(len(labels), cfg.network.output_neuron_number)
+
+                for ind in i_history[-1000:]:
+                    img, lbl = training_dataset[ind]
+
+                    network.input_image(img)
+                    network.run(cfg.input.duration_per_testing_image)
+
+                    counts = network.layers['O'].spike_counts.clone()
+
+                    network.after_batch()
+
+                    if counts.sum() > 0:
+                        response_map[lbl] += counts.float() / counts.sum()
+
+                    print(counts)
+
+                    for post in range(cfg.network.output_neuron_number):
+                        print('Neuron #%d' % post)
+
+                        score = response_map[:, post].clone()
+
+                        _, max_ind = score.max(dim=0)
+
+                        print('Labeled as %d' % labels[max_ind])
+                        print('Proba vec:', score)
+
+                neuron_activity = response_map.sum(0)
+
+                score_map = response_map / neuron_activity * neuron_activity.min() / neuron_activity
+
+                # test accuracy
+                total_count = 0
+                hit_count = 0
+
+                while total_count < 100:
+                    ind = random.choice(range(10000))
+                    testing_dataset = load_bimnist(False)
+
+                    img, lbl = testing_dataset[ind]
+                    if lbl not in labels:
+                        continue
+
+                    total_count += 1
+
+                    network.input_image(image)
+                    network.run(config.input.duration_per_testing_image)
+
+                    counts = network.layers['O'].spike_counts.clone()
+
+                    network.after_batch()
+
+                    if counts.sum() > 0:
+                        score = torch.matmul(score_map, counts.squeeze(0).float() / counts.sum())
+
+                        _, max_ind = score.max(dim=0)
+
+                        # _, max_ind = counts.max(0)
+                        # max_ind = neuron_labels[max_ind]
+
+                        predict = labels[max_ind]
+
+                        if predict == label:
+                            hit_count += 1
+
+                print(hit_count / total_count)
+                with open(os.path.join(folder, 'history.txt'), 'a') as f:
+                    f.write('%d %d %d %f\n' % (idx, total_count, hit_count, hit_count / total_count))
+
+                network.training_mode()
 
         idx += 1
 
