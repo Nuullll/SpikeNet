@@ -67,7 +67,7 @@ class NetworkLoader(object):
         # {name: [state_vars]}
         monitors = {
             # 'I': ['o'],
-            'O': ['v']
+            # 'O': ['v']
         }
 
         # Config network
@@ -164,6 +164,7 @@ class Network:
         self.monitors = {}          # {layer_name: <Monitor>}
 
         self.time = 0.
+        self.local_time = 0.
 
         self.config = config
 
@@ -175,7 +176,7 @@ class Network:
 
         self.inference = False
 
-    def run(self, time):
+    def run(self, time, feedforward=True):
         """
         Run simulation for given `time`.
         :param time:        float       Simulation time. (NOT steps)
@@ -188,28 +189,41 @@ class Network:
             # Update monitors
             self._update_monitors()
 
+            # generate input spikes
+            self.layers['I'].process()
+
             # STDP updates according to incoming new pre-spikes
             self._update_on_pre_spikes(self.time)
 
-            # Feed forward
-            self._feed_forward()
+            if feedforward:
+                # Feed forward
+                self._feed_forward()
+            else:
+                self.layers['O'].clean_input()
 
             # Layers process
-            self._process()
+            self.layers['O'].process()
 
             # STDP updates according to incoming new post-spikes
             self._update_on_post_spikes(self.time)
 
             self.time += 1
+            self.local_time += 1
 
             if not self.inference:
-                if self.time % 30000 == 0:
+                if self.time % 10000 == 0:
                     plt.figure(1)
                     plt.clf()
                     self.plot_weight_map(('I', 'O'), 0.01)
                     # plt.figure(2)
                     # plt.clf()
                     # plt.plot(self.monitors['O'].record['v'].numpy())
+                    # plt.pause(0.01)
+                    #
+                    # # concurrency analysis
+                    # plt.figure(3)
+                    # plt.clf()
+                    # plt.plot(self.monitors['I'].record['o'].sum(1).numpy())
                     # plt.pause(0.01)
 
             if not self.inference:
@@ -299,9 +313,13 @@ class Network:
         """
         self.connections[connection_name].plot_weight_map(pause_interval)
 
-    def input_image(self, image):
+    def input_image(self, image, factor=1):
+
+        for lyr in self.layers.values():
+            lyr.reset_time()
+
         self.layers['I'].image = image.view(-1)
-        self.layers['I'].image_norm = self.layers['I'].image.sum()
+        self.layers['I'].image_norm = self.layers['I'].image.sum() / factor
 
         # reset membrane potential
         output = self.layers['O']

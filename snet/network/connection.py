@@ -62,24 +62,9 @@ class Connection:
         if self.static:
             return
 
-        # record new pre-spikes
-        self._last_pre_spike_time.masked_fill_(self.pre_layer.firing_mask, time)
+        active = torch.ger(self.pre_layer.firing_mask, self.post_layer.last_firing_mask)
 
-        # mask
-        post_active = self._last_post_spike_time >= 0
-        active = torch.ger(self.pre_layer.firing_mask, post_active)     # new pre-spikes and fired post-spikes
-
-        # calculate timing difference (where new pre-spikes timing is now)
-        dt = self._last_pre_spike_time.repeat(self.post_layer.size, 1).t() - \
-            self._last_post_spike_time.repeat(self.pre_layer.size, 1)
-
-        window_mask = (dt <= 2 * self.tau_p)
-        active &= window_mask
-
-        # weights decrease, because pre-spikes come after post-spikes
-        dw = self.learn_rate_m * (self.weight - self.w_min) * torch.exp(-dt/self.tau_m)
-        dw.masked_fill_(~active, 0)
-        self.weight -= RRAM_device_variation(self.variation, dw)
+        self.weight[active] -= self.learn_rate_m * (self.weight[active] - self.w_min)
         self._clamp()
 
     def update_on_post_spikes(self, time):
@@ -89,32 +74,10 @@ class Connection:
         if self.static:
             return
 
-        # record new post-spikes
-        self._last_post_spike_time.masked_fill_(self.post_layer.firing_mask, time)
+        # pre-spikes and post-spikes at the same time
+        active = torch.ger(self.pre_layer.firing_mask, self.post_layer.firing_mask)
 
-        # mask
-        pre_active = self._last_pre_spike_time >= 0
-        active = torch.ger(pre_active, self.post_layer.firing_mask)     # new post-spikes and fired pre-spikes
-
-        # calculate timing difference (where new post-spikes timing is now)
-        dt = self._last_post_spike_time.repeat(self.pre_layer.size, 1) - \
-            self._last_pre_spike_time.repeat(self.post_layer.size, 1).t()
-
-        window_mask = (dt <= 2 * self.tau_m)
-        active &= window_mask
-
-        # # decay on post-spikes
-        # decay_mask = torch.ger(torch.ones_like(pre_active), self.post_layer.firing_mask)
-        # decay_mask &= ~window_mask
-        # dw = self.decay * (self.weight - self.w_min)
-        # dw.masked_fill_(~decay_mask, 0)
-        # self.weight -= RRAM_device_variation(self.variation, dw)
-        # self._clamp()
-
-        # weights increase, because post-spikes come after pre-spikes
-        dw = self.learn_rate_p * (self.w_max - self.weight) * torch.exp(-dt/self.tau_p)
-        dw.masked_fill_(~active, 0)
-        self.weight += RRAM_device_variation(self.variation, dw)
+        self.weight[active] += self.learn_rate_p * (self.w_max - self.weight[active])
         self._clamp()
 
     def plot_weight_map(self, pause_interval):

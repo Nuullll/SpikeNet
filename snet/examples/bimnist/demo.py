@@ -26,7 +26,7 @@ if not os.path.exists(RESULTS_DIR):
 def load_bimnist(train=True):
 
     dataset = MNIST(DATASET_DIR, train=train, download=True, transform=transforms.Compose([
-        # transforms.Resize((11, 11)),
+        transforms.Resize((11, 11)),
         transforms.ToTensor(),
         # transforms.Lambda(lambda x: (x > 0.5).squeeze(0))
     ]))
@@ -55,7 +55,7 @@ def cfg_abstract(cfg, prefix='', suffix=''):
 
 
 def train(training_dataset, cfg, overwrite_check=True):
-    folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg, suffix='background&greedy'))
+    folder = os.path.join(RESULTS_DIR, cfg_abstract(cfg, prefix='simple-stdp'))
     if not os.path.exists(folder):
         os.makedirs(folder)
     else:
@@ -85,31 +85,11 @@ def train(training_dataset, cfg, overwrite_check=True):
         i_history.append(i)
 
         # input image
-        network.input_image(image)
+        network.input_image(image, cfg.input.pattern_firing_rate)
 
-        # run simulation
-        if network.run(cfg.input.duration_per_training_image):
-            # noise stimuli
-            noise = 1 - image.view(-1)
-            network.input_image(noise)
-            network.layers['I'].image_norm /= 20
-            network.run(20)
-        label_history.append(label.item())
+        fired = network.run(cfg.input.duration_per_training_image)
 
-        # plt.plot(network.monitors['O'].record['v'].numpy())
-        # plt.show()
         counts = network.layers['O'].spike_counts.clone()
-
-        # Extra run
-        # while counts.sum() == 0:
-        #     network.after_batch(keep_count=True)
-        #     network.run(cfg.input.duration_per_training_image)
-        #     label_history.append(label.item())
-        #
-        #     print('@Extra')
-        #     counts = network.layers['O'].spike_counts.clone()
-        #
-        #     break
 
         print(network.time)
         print(counts)
@@ -117,87 +97,16 @@ def train(training_dataset, cfg, overwrite_check=True):
 
         network.after_batch()
 
-        if idx % 1000 == 0:
-            # plt.figure(4)
-            # plt.clf()
-            # spike_events = network.layers['O'].activity_history.nonzero()
-            # plt.scatter(spike_events.numpy()[:, 0], spike_events.numpy()[:, 1],
-            #             c=torch.tensor(label_history)[spike_events[:, 0]].numpy())
-            # plt.pause(0.01)
-            if len(i_history) >= 1000:
+        # run simulation
+        if fired:
+            # noise stimuli
+            noise = 1 - image.view(-1)
+            network.input_image(noise, cfg.input.background_firing_rate)
+            network.run(10, feedforward=False)
+        label_history.append(label.item())
 
-                network.inference_mode()
-
-                response_map = torch.zeros(len(labels), cfg.network.output_neuron_number)
-
-                for ind in i_history[-1000:]:
-                    img, lbl = training_dataset[ind]
-
-                    network.input_image(img)
-                    network.run(cfg.input.duration_per_testing_image)
-
-                    counts = network.layers['O'].spike_counts.clone()
-
-                    network.after_batch()
-
-                    if counts.sum() > 0:
-                        response_map[lbl] += counts.float() / counts.sum()
-
-                    print(counts)
-
-                    for post in range(cfg.network.output_neuron_number):
-                        print('Neuron #%d' % post)
-
-                        score = response_map[:, post].clone()
-
-                        _, max_ind = score.max(dim=0)
-
-                        print('Labeled as %d' % labels[max_ind])
-                        print('Proba vec:', score)
-
-                neuron_activity = response_map.sum(0)
-
-                score_map = response_map / neuron_activity * neuron_activity.min() / neuron_activity
-
-                # test accuracy
-                total_count = 0
-                hit_count = 0
-
-                while total_count < 100:
-                    ind = random.choice(range(10000))
-                    testing_dataset = load_bimnist(False)
-
-                    img, lbl = testing_dataset[ind]
-                    if lbl not in labels:
-                        continue
-
-                    total_count += 1
-
-                    network.input_image(image)
-                    network.run(config.input.duration_per_testing_image)
-
-                    counts = network.layers['O'].spike_counts.clone()
-
-                    network.after_batch()
-
-                    if counts.sum() > 0:
-                        score = torch.matmul(score_map, counts.squeeze(0).float() / counts.sum())
-
-                        _, max_ind = score.max(dim=0)
-
-                        # _, max_ind = counts.max(0)
-                        # max_ind = neuron_labels[max_ind]
-
-                        predict = labels[max_ind]
-
-                        if predict == label:
-                            hit_count += 1
-
-                print(hit_count / total_count)
-                with open(os.path.join(folder, 'history.txt'), 'a') as f:
-                    f.write('%d %d %d %f\n' % (idx, total_count, hit_count, hit_count / total_count))
-
-                network.training_mode()
+        # plt.plot(network.monitors['O'].record['v'].numpy())
+        # plt.show()
 
         idx += 1
 
@@ -251,10 +160,10 @@ def test(training_dataset, testing_dataset, folder):
 
         # plt.plot(network.monitors['O'].record['v'].numpy())
         # plt.show()
-        counts = network.layers['O'].spike_counts.clone()
+        counts = network.layers['O'].spike_counts.clone().float()
 
         if counts.sum() > 0:
-            response_map[label] += counts.float() / counts.sum()
+            response_map[label] += counts / counts.sum()
 
         print(counts)
 
@@ -283,17 +192,6 @@ def test(training_dataset, testing_dataset, folder):
     # test accuracy
     idx = 0
 
-    # for post in range(len(v_th)):
-    #     print('Neuron #%d' % post)
-    #
-    #     score = score_map[:, post].clone()
-    #
-    #     max_val, max_ind = score.max(dim=0)
-    #
-    #     if max_val < 0.8:
-    #         print('Pruned.')
-    #         network.connections[('I', 'O')].weight[:, post] = torch.zeros(28, 28).view(-1)
-
     for image, label in testing_dataset:
         if label not in labels:
             continue
@@ -302,17 +200,14 @@ def test(training_dataset, testing_dataset, folder):
         network.input_image(image)
         network.run(config.input.duration_per_testing_image)
 
-        counts = network.layers['O'].spike_counts.clone()
+        counts = network.layers['O'].spike_counts.clone().float()
 
         network.after_batch()
 
         if counts.sum() > 0:
-            score = torch.matmul(score_map, counts.squeeze(0).float() / counts.sum())
+            score = torch.matmul(score_map, counts.squeeze(0) / counts.sum())
 
             _, max_ind = score.max(dim=0)
-
-            # _, max_ind = counts.max(0)
-            # max_ind = neuron_labels[max_ind]
 
             predict = labels[max_ind]
 

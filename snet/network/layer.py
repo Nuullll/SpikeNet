@@ -31,6 +31,8 @@ class Layer(object):
 
         # activity tracker
         self.activity_history = torch.tensor([])
+        self.v_th_history = torch.tensor([])
+        self.phase_time_history = []
 
         # adaptive thresholds
         self.adaptive = False
@@ -46,7 +48,13 @@ class Layer(object):
 
         self.track_phase = self.config.lif_layer.track_phase
 
-        self.time = 0
+        self.time = 0.
+
+    def clean_input(self):
+        self.i = torch.zeros_like(self.state, dtype=torch.float)
+
+    def reset_time(self):
+        self.time = 0.
 
     def process(self):
         """
@@ -86,8 +94,8 @@ class Layer(object):
         """
         Track neurons' recent activity.
         """
-        self.activity_history = torch.cat((self.activity_history, self.spike_counts.float().unsqueeze(0)), 0)
-
+        # self.activity_history = torch.cat((self.activity_history, self.spike_counts.float().unsqueeze(0)), 0)
+        pass
         # if len(self.activity_history) > self.track_phase:
         #     self.activity_history = self.activity_history[-self.track_phase:]
 
@@ -167,10 +175,15 @@ class LIFLayer(Layer):
         self.activated_phase_target = self.config.lif_layer.activated_phase_target
         self.duration_per_training_image = self.config.input.duration_per_training_image
 
+        self.expected_firing_time_ratio = self.config.lif_layer.expected_firing_time_ratio
+        self.expected_no_firing_time_ratio = self.config.lif_layer.expected_no_firing_time_ratio
+
         # the membrane potential serves as the internal state
         super(LIFLayer, self).__init__(state=torch.ones(size) * self.v_rest, config=config)
 
         self.size = size
+
+        self.v_before_fire = torch.zeros(size, dtype=torch.float)
 
         self.v_th = torch.ones(size, dtype=torch.float) * self.v_th_rest
 
@@ -182,6 +195,9 @@ class LIFLayer(Layer):
 
         # lateral inhibition
         self.inhibition = True
+
+        # last firing mask
+        self.last_firing_mask = torch.zeros_like(self.state, dtype=torch.uint8)
 
     @property
     def v(self):
@@ -201,6 +217,8 @@ class LIFLayer(Layer):
         """
         Leaks, integrates and fires.
         """
+        self.last_firing_mask = self.firing_mask.clone()
+
         self._preprocess()
 
         # leak
@@ -247,6 +265,9 @@ class LIFLayer(Layer):
             if len(indices) > 0:
                 mask = torch.ones_like(self.firing_mask)
                 mask.scatter_(0, indices, 0)
+
+                self.v_before_fire = self.v.clone()
+
                 self.v.masked_fill_(mask, self.v_rest)
 
         # ready to fire
@@ -276,17 +297,46 @@ class LIFLayer(Layer):
         self.v.masked_fill_(self.firing_mask, self.v_rest)
         self._spike_history.masked_fill_(self.firing_mask, 0)
 
+    def track_activity(self):
+        self.activity_history = torch.cat((self.activity_history, self.spike_counts.float().unsqueeze(0)), 0)
+        self.phase_time_history.append(self.time)
+
+        self.v_th_history = torch.cat((self.v_th_history, self.v_th.unsqueeze(0)), 0)
+
+        if len(self.activity_history) > self.track_phase:
+            self.activity_history = self.activity_history[-self.track_phase:]
+
+        if len(self.v_th_history) > self.track_phase:
+            self.v_th_history = self.v_th_history[-self.track_phase:]
+
+        if len(self.phase_time_history) > self.track_phase:
+            self.phase_time_history = self.phase_time_history[-self.track_phase:]
+
     def adapt_thresholds(self):
         """
         Adapts thresholds.
         """
+        # if self.adaptive:
+        #     if len(self.activity_history) > 0:
+        #         activity_history = self.activity_history[-self.track_phase:].float()
+        #         a = activity_history.sum(0) / (len(activity_history) * self.duration_per_training_image)
+        #         t = self.firing_event_target / (self.size * self.duration_per_training_image)
+        #
+        #         self.v_th += 0.5 * (a - t)
         if self.adaptive:
-            if len(self.activity_history) > 0:
-                activity_history = self.activity_history[-self.track_phase:].float()
-                a = activity_history.sum(0) / (len(activity_history) * self.duration_per_training_image)
-                t = self.firing_event_target / (self.size * self.duration_per_training_image)
+            phase_count = len(self.activity_history)
 
-                self.v_th += 0.5 * (a - t)
+            target_firing_rate = phase_count / self.size / ((phase_count / self.size * self.expected_firing_time_ratio +
+                                                             phase_count * (1 - 1 / self.size)) *
+                                                            self.duration_per_training_image)
+
+            actual_firing_rate = self.activity_history.sum(0) / sum(self.phase_time_history)
+
+            v_th_target = actual_firing_rate / target_firing_rate * self.v_th_history.mean(0)
+
+            dv_th = (v_th_target - self.v_th) / len(self.activity_history)
+
+            self.v_th += dv_th
 
     def update_cfg(self):
         super(LIFLayer, self).update_cfg()
